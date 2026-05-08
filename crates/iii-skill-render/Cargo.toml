@@ -1,11 +1,11 @@
 [package]
-name = "iii-skill-check"
+name = "iii-skill-render"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [[bin]]
-name = "iii-skill-check"
+name = "iii-skill-render"
 path = "src/main.rs"
 
 [dependencies]

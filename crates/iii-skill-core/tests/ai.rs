@@ -10,7 +10,7 @@ fn repo_root() -> PathBuf {
 
 #[test]
 fn build_user_prompt_includes_rules_and_artifact() {
-    let prompt = iii_skill_check::ai::build_user_prompt(
+    let prompt = iii_skill_core::ai::build_user_prompt(
         "Voice: be terse.\n",
         "README.md",
         "# Hello\nworld\n",
@@ -22,7 +22,7 @@ fn build_user_prompt_includes_rules_and_artifact() {
 
 #[test]
 fn build_user_prompt_line_numbers_the_artifact() {
-    let prompt = iii_skill_check::ai::build_user_prompt(
+    let prompt = iii_skill_core::ai::build_user_prompt(
         "rules",
         "x.md",
         "alpha\nbeta\ngamma\n",
@@ -35,13 +35,13 @@ fn build_user_prompt_line_numbers_the_artifact() {
 
 #[test]
 fn parse_response_returns_ok_on_pass() {
-    assert!(iii_skill_check::ai::parse_response("PASS").is_ok());
-    assert!(iii_skill_check::ai::parse_response("  PASS\n").is_ok());
+    assert!(iii_skill_core::ai::parse_response("PASS").is_ok());
+    assert!(iii_skill_core::ai::parse_response("  PASS\n").is_ok());
 }
 
 #[test]
 fn parse_response_returns_err_on_fail() {
-    let r = iii_skill_check::ai::parse_response("FAIL\nREADME.md:5 — voice drift — rephrase");
+    let r = iii_skill_core::ai::parse_response("FAIL\nREADME.md:5 — voice drift — rephrase");
     assert!(r.is_err());
     let body = r.unwrap_err();
     assert!(body.contains("voice drift"));
@@ -50,9 +50,9 @@ fn parse_response_returns_err_on_fail() {
 
 #[test]
 fn parse_response_returns_err_on_anything_other_than_pass() {
-    assert!(iii_skill_check::ai::parse_response("").is_err());
-    assert!(iii_skill_check::ai::parse_response("Pass.").is_err());
-    assert!(iii_skill_check::ai::parse_response("Looks good!").is_err());
+    assert!(iii_skill_core::ai::parse_response("").is_err());
+    assert!(iii_skill_core::ai::parse_response("Pass.").is_err());
+    assert!(iii_skill_core::ai::parse_response("Looks good!").is_err());
 }
 
 /// Live API smoke test: only runs when ANTHROPIC_API_KEY is set. Asserts that
@@ -89,7 +89,7 @@ fn ai_check_passes_example_readme_when_key_present() {
         rules.push_str(&format!("# {name}\n\n{body}\n\n"));
     }
 
-    let result = iii_skill_check::ai::check_artifact(
+    let result = iii_skill_core::ai::check_artifact(
         &example_readme,
         &rules,
         &prompt,

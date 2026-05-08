@@ -11,7 +11,7 @@ fn repo_root() -> PathBuf {
 #[test]
 fn read_manifest_parses_example_worker() {
     let example = repo_root().join("fixtures/example-worker");
-    let manifest = iii_skill_check::introspect::read_manifest(&example)
+    let manifest = iii_skill_core::introspect::read_manifest(&example)
         .expect("read_manifest should succeed for example-worker");
 
     assert_eq!(manifest.name, "textstats");
@@ -28,7 +28,7 @@ fn read_manifest_parses_example_worker() {
 #[test]
 fn read_manifest_errors_when_file_absent() {
     let tmp = tempfile::tempdir().unwrap();
-    let result = iii_skill_check::introspect::read_manifest(tmp.path());
+    let result = iii_skill_core::introspect::read_manifest(tmp.path());
     assert!(
         result.is_err(),
         "expected an error when iii.worker.yaml is absent"
@@ -39,6 +39,6 @@ fn read_manifest_errors_when_file_absent() {
 fn read_manifest_errors_on_invalid_yaml() {
     let tmp = tempfile::tempdir().unwrap();
     std::fs::write(tmp.path().join("iii.worker.yaml"), "not: [valid: yaml").unwrap();
-    let result = iii_skill_check::introspect::read_manifest(tmp.path());
+    let result = iii_skill_core::introspect::read_manifest(tmp.path());
     assert!(result.is_err(), "expected a parse error on malformed YAML");
 }

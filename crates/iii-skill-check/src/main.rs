@@ -12,13 +12,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Render docs/* + iii.worker.yaml.name into README.md, skill.md, skills/*.md.
-    Render {
-        worker: PathBuf,
-        /// Write rendered files to disk; without this flag, renders to memory only.
-        #[arg(long)]
-        write: bool,
-    },
     /// Run all configured layers against a worker.
     Verify {
         worker: PathBuf,
@@ -33,31 +26,9 @@ enum Command {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Render { worker, write } => run_render(&worker, write),
         Command::Verify { worker, layers } => run_verify(&worker, &layers),
         Command::VerifyRendered { worker } => run_verify_rendered(&worker),
     }
-}
-
-fn run_render(worker: &Path, write: bool) -> anyhow::Result<()> {
-    let out = iii_skill_check::render::render_worker(worker)?;
-    println!(
-        "rendered {} (readme {} bytes, skill {} bytes, {} leaves)",
-        worker.display(),
-        out.readme.len(),
-        out.skill.len(),
-        out.leaves.len(),
-    );
-    if write {
-        std::fs::write(worker.join("README.md"), &out.readme)?;
-        std::fs::write(worker.join("skill.md"), &out.skill)?;
-        std::fs::create_dir_all(worker.join("skills"))?;
-        for (leaf, body) in &out.leaves {
-            std::fs::write(worker.join("skills").join(format!("{leaf}.md")), body)?;
-        }
-        println!("wrote artifacts to {}", worker.display());
-    }
-    Ok(())
 }
 
 fn run_verify(worker: &Path, layers: &str) -> anyhow::Result<()> {
@@ -65,22 +36,22 @@ fn run_verify(worker: &Path, layers: &str) -> anyhow::Result<()> {
         .parent()
         .ok_or_else(|| anyhow::anyhow!("worker dir has no parent: {}", worker.display()))?;
     let config_path = workers_root.join(".skill-check.yaml");
-    let config = iii_skill_check::config::load(&config_path)?;
+    let config = iii_skill_core::config::load(&config_path)?;
 
     let layer_set: HashSet<&str> = layers.split(',').map(|s| s.trim()).collect();
     let artifacts = enumerate_rendered_artifacts(worker);
 
-    let mut all_violations: Vec<iii_skill_check::structure::Violation> = Vec::new();
+    let mut all_violations: Vec<iii_skill_core::structure::Violation> = Vec::new();
     let mut ai_failures: Vec<(PathBuf, String)> = Vec::new();
 
     if layer_set.contains("structure") {
-        all_violations.extend(iii_skill_check::structure::check(worker)?);
+        all_violations.extend(iii_skill_core::structure::check(worker)?);
     }
 
     if layer_set.contains("vale") {
         let vale_config = workers_root.join(".vale.ini");
         let refs: Vec<&Path> = artifacts.iter().map(|p| p.as_path()).collect();
-        all_violations.extend(iii_skill_check::vale::run(&refs, &vale_config)?);
+        all_violations.extend(iii_skill_core::vale::run(&refs, &vale_config)?);
     }
 
     if layer_set.contains("ai") {
@@ -91,7 +62,7 @@ fn run_verify(worker: &Path, layers: &str) -> anyhow::Result<()> {
             .with_context(|| format!("reading {}", prompt_path.display()))?;
 
         for art in &artifacts {
-            match iii_skill_check::ai::check_artifact(
+            match iii_skill_core::ai::check_artifact(
                 art,
                 &rules,
                 &system_prompt,
@@ -126,7 +97,7 @@ fn run_verify(worker: &Path, layers: &str) -> anyhow::Result<()> {
 }
 
 fn run_verify_rendered(worker: &Path) -> anyhow::Result<()> {
-    let outputs = iii_skill_check::render::render_worker(worker)?;
+    let outputs = iii_skill_core::render::render_worker(worker)?;
     let mut drift: Vec<String> = Vec::new();
 
     let readme_disk =
@@ -151,7 +122,7 @@ fn run_verify_rendered(worker: &Path) -> anyhow::Result<()> {
         for d in &drift {
             eprintln!("{d}");
         }
-        anyhow::bail!("rendered artifacts are out of date — run `iii-skill-check render --write`");
+        anyhow::bail!("rendered artifacts are out of date — run `iii-skill-render <worker> --write`");
     }
     println!("rendered artifacts match {}", worker.display());
     Ok(())

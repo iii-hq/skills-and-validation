@@ -34,7 +34,7 @@ fn companions_partial_appears_in_readme_install_section() {
     let tmp = TempDir::new().unwrap();
     write_minimal_worker_with_companions(tmp.path(), "fixture", Some(COMPANION_BODY));
 
-    let outputs = iii_skill_check::render::render_worker(tmp.path()).unwrap();
+    let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
 
     let readme = &outputs.readme;
     assert!(
@@ -62,7 +62,7 @@ fn companions_partial_does_not_appear_in_skill_md() {
     let tmp = TempDir::new().unwrap();
     write_minimal_worker_with_companions(tmp.path(), "fixture", Some(COMPANION_BODY));
 
-    let outputs = iii_skill_check::render::render_worker(tmp.path()).unwrap();
+    let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
     assert!(
         !outputs.skill.contains("To surface every"),
         "companions content leaked into skill.md: {}",
@@ -80,7 +80,7 @@ fn no_companions_partial_means_install_section_is_just_boilerplate() {
     let tmp = TempDir::new().unwrap();
     write_minimal_worker_with_companions(tmp.path(), "fixture", None);
 
-    let outputs = iii_skill_check::render::render_worker(tmp.path()).unwrap();
+    let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
     // Without companions, the only `iii worker add <name>` invocation is the
     // worker's own install command (the boilerplate sentence has the literal
     // `iii worker add` in inline code but not the trailing worker name).

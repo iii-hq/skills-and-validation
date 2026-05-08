@@ -25,7 +25,7 @@ fn vale_passes_example_artifacts() {
     let artifacts: Vec<&std::path::Path> = vec![&readme, &skill, &analyze, &diff, &summarize];
 
     let violations =
-        iii_skill_check::vale::run(&artifacts, &vale_config()).expect("vale should run");
+        iii_skill_core::vale::run(&artifacts, &vale_config()).expect("vale should run");
     assert!(
         violations.is_empty(),
         "expected zero Vale violations on example-worker, got: {violations:?}"
@@ -44,7 +44,7 @@ fn vale_flags_marketing_fluff_in_a_readme() {
 
     let artifacts: Vec<&std::path::Path> = vec![&path];
 
-    let violations = iii_skill_check::vale::run(&artifacts, &vale_config()).unwrap();
+    let violations = iii_skill_core::vale::run(&artifacts, &vale_config()).unwrap();
     assert!(
         violations
             .iter()
@@ -72,7 +72,7 @@ fn vale_flags_howto_teaching_phrase_in_skill() {
 
     let artifacts: Vec<&std::path::Path> = vec![&path];
 
-    let violations = iii_skill_check::vale::run(&artifacts, &vale_config()).unwrap();
+    let violations = iii_skill_core::vale::run(&artifacts, &vale_config()).unwrap();
     assert!(
         violations
             .iter()

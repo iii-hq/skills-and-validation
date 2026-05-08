@@ -32,7 +32,7 @@ fn write_minimal_worker(dir: &Path, name: &str) {
     )
     .unwrap();
 
-    let outputs = iii_skill_check::render::render_worker(dir).unwrap();
+    let outputs = iii_skill_core::render::render_worker(dir).unwrap();
     std::fs::write(dir.join("README.md"), &outputs.readme).unwrap();
     std::fs::write(dir.join("skill.md"), &outputs.skill).unwrap();
     std::fs::create_dir_all(dir.join("skills")).unwrap();
@@ -45,7 +45,7 @@ fn write_minimal_worker(dir: &Path, name: &str) {
 fn example_worker_passes_structure_check() {
     let example = repo_root().join("fixtures/example-worker");
     let violations =
-        iii_skill_check::structure::check(&example).expect("structure check should not error");
+        iii_skill_core::structure::check(&example).expect("structure check should not error");
     assert!(
         violations.is_empty(),
         "expected zero violations against example-worker, got: {violations:?}"
@@ -60,7 +60,7 @@ fn flags_install_mismatch() {
     let bad = readme.replace("iii worker add fixture", "iii worker add wrong-name");
     std::fs::write(tmp.path().join("README.md"), bad).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         violations
             .iter()
@@ -76,7 +76,7 @@ fn flags_missing_install_section() {
     let readme = "<!-- generated -->\n\n# fixture\n\nIntro paragraph.\n\n## Quickstart\n\n```rust\nfn main() {}\n```\n\n## Configuration\n\n```yaml\nkey: value\n```\n";
     std::fs::write(tmp.path().join("README.md"), readme).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         violations.iter().any(|v| v.message.contains("## Install")),
         "expected a missing-section violation, got: {violations:?}"
@@ -91,7 +91,7 @@ fn flags_unbalanced_llm_only() {
     readme.push_str("\n<!-- llm-only:start -->\norphan body without close\n");
     std::fs::write(tmp.path().join("README.md"), readme).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         violations
             .iter()
@@ -108,7 +108,7 @@ fn flags_cargo_build_block() {
     readme.push_str("\n```bash\ncargo build --release\n```\n");
     std::fs::write(tmp.path().join("README.md"), readme).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         violations
             .iter()
@@ -126,7 +126,7 @@ fn flags_manifest_jq_verification_step() {
     readme.push_str("\n```bash\nfixture --manifest | jq\n```\n");
     std::fs::write(tmp.path().join("README.md"), readme).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         violations.iter().any(|v| v.message.contains("--manifest")),
         "expected --manifest | jq violation, got: {violations:?}"
@@ -141,7 +141,7 @@ fn flags_bin_help_verification_step() {
     readme.push_str("\n```bash\nfixture --help\n```\n");
     std::fs::write(tmp.path().join("README.md"), readme).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         violations.iter().any(|v| v.message.contains("--help")),
         "expected --help violation, got: {violations:?}"
@@ -156,7 +156,7 @@ fn flags_bin_manifest_without_jq() {
     readme.push_str("\n```bash\nfixture --manifest\n```\n");
     std::fs::write(tmp.path().join("README.md"), readme).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         violations.iter().any(|v| v.message.contains("--manifest")),
         "expected --manifest violation, got: {violations:?}"
@@ -173,7 +173,7 @@ fn does_not_flag_help_in_unrelated_context() {
     readme.push_str("\nRun `iii --help` to see CLI options.\n");
     std::fs::write(tmp.path().join("README.md"), readme).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         !violations.iter().any(|v| v.message.contains("--help")),
         "should not flag `iii --help` (different bin name), got: {violations:?}"
@@ -188,7 +188,7 @@ fn flags_iii_link_to_unknown_leaf() {
     skill.push_str("\n- [bogus](iii://fixture/nonexistent) — broken link\n");
     std::fs::write(tmp.path().join("skill.md"), skill).unwrap();
 
-    let violations = iii_skill_check::structure::check(tmp.path()).unwrap();
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
         violations.iter().any(|v| v.message.contains("nonexistent")),
         "expected a broken-link violation, got: {violations:?}"

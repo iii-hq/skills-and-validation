@@ -1,3 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["crates/iii-skill-check"]
+members = [
+    "crates/iii-skill-core",
+    "crates/iii-skill-render",
+    "crates/iii-skill-check",
+]

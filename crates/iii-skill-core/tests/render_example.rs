@@ -18,7 +18,7 @@ fn render_example_matches_golden() {
         .to_path_buf();
     let example = repo_root.join("fixtures/example-worker");
 
-    let outputs = iii_skill_check::render::render_worker(&example)
+    let outputs = iii_skill_core::render::render_worker(&example)
         .expect("render_worker should succeed against the example-worker fixture");
 
     let expected_readme = std::fs::read_to_string(example.join("README.md")).unwrap();
