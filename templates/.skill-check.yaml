@@ -1,7 +1,4 @@
-rules:
-  path: ./project-rules
-styles:
-  path: ./styles
+version: 0.1.0
 ai_check:
   provider: anthropic
   model: claude-opus-4-7

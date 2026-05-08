@@ -16,8 +16,26 @@ fn loads_template_skill_check_yaml() {
     assert_eq!(config.ai_check.model, "claude-opus-4-7");
     assert_eq!(config.ai_check.api_key_env_var, "ANTHROPIC_API_KEY");
     assert_eq!(config.ai_check.max_tokens, 4000);
-    assert_eq!(config.rules.path, std::path::PathBuf::from("./project-rules"));
-    assert_eq!(config.styles.path, std::path::PathBuf::from("./styles"));
+    assert_eq!(config.version.as_deref(), Some("0.1.0"));
+    // Template omits rules/styles by design — consumers should let the
+    // bundle defaults apply unless they want a local override.
+    assert!(config.rules.is_none());
+    assert!(config.styles.is_none());
+}
+
+#[test]
+fn loads_config_with_explicit_rules_path() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        tmp.path(),
+        "rules:\n  path: ./local-rules\nai_check:\n  provider: anthropic\n  model: m\n  api_key_env_var: K\n  max_tokens: 100\n",
+    )
+    .unwrap();
+    let config = iii_skill_core::config::load(tmp.path()).expect("config should load");
+    assert_eq!(
+        config.rules.as_ref().unwrap().path,
+        std::path::PathBuf::from("./local-rules")
+    );
 }
 
 #[test]

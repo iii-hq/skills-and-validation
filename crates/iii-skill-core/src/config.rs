@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub rules: PathSource,
-    pub styles: PathSource,
+    pub version: Option<String>,
+    pub rules: Option<PathSource>,
+    pub styles: Option<PathSource>,
     pub ai_check: AiCheck,
 }
 

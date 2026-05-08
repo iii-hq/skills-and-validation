@@ -18,6 +18,15 @@ enum Command {
         /// Subset of layers to run: structure,vale,ai (comma-separated).
         #[arg(long, default_value = "structure,vale,ai")]
         layers: String,
+        /// Override the project-rules directory. Resolution order:
+        /// this flag, then `.skill-check.yaml` `rules.path`, then bundled rules.
+        #[arg(long)]
+        rules_dir: Option<PathBuf>,
+        /// Override the Vale config (.vale.ini). Resolution order:
+        /// this flag, then sibling `.vale.ini` next to `.skill-check.yaml`,
+        /// then bundled `.vale.ini`.
+        #[arg(long)]
+        vale_config: Option<PathBuf>,
     },
     /// Re-render and diff against checked-in artifacts; non-zero on drift.
     VerifyRendered { worker: PathBuf },
@@ -26,12 +35,22 @@ enum Command {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Verify { worker, layers } => run_verify(&worker, &layers),
+        Command::Verify {
+            worker,
+            layers,
+            rules_dir,
+            vale_config,
+        } => run_verify(&worker, &layers, rules_dir, vale_config),
         Command::VerifyRendered { worker } => run_verify_rendered(&worker),
     }
 }
 
-fn run_verify(worker: &Path, layers: &str) -> anyhow::Result<()> {
+fn run_verify(
+    worker: &Path,
+    layers: &str,
+    rules_override: Option<PathBuf>,
+    vale_override: Option<PathBuf>,
+) -> anyhow::Result<()> {
     let workers_root = worker
         .parent()
         .ok_or_else(|| anyhow::anyhow!("worker dir has no parent: {}", worker.display()))?;
@@ -49,13 +68,13 @@ fn run_verify(worker: &Path, layers: &str) -> anyhow::Result<()> {
     }
 
     if layer_set.contains("vale") {
-        let vale_config = workers_root.join(".vale.ini");
+        let vale_config = resolve_vale_config(workers_root, vale_override.as_deref())?;
         let refs: Vec<&Path> = artifacts.iter().map(|p| p.as_path()).collect();
         all_violations.extend(iii_skill_core::vale::run(&refs, &vale_config)?);
     }
 
     if layer_set.contains("ai") {
-        let rules_dir = workers_root.join(&config.rules.path);
+        let rules_dir = resolve_rules_dir(workers_root, &config, rules_override.as_deref())?;
         let rules = load_project_rules(&rules_dir)?;
         let prompt_path = rules_dir.join("_skill-check-prompt.md");
         let system_prompt = std::fs::read_to_string(&prompt_path)
@@ -94,6 +113,52 @@ fn run_verify(worker: &Path, layers: &str) -> anyhow::Result<()> {
     }
     println!("verify clean across [{layers}] for {}", worker.display());
     Ok(())
+}
+
+/// Resolve project-rules directory. Order: CLI flag, config field, bundled.
+fn resolve_rules_dir(
+    workers_root: &Path,
+    config: &iii_skill_core::config::Config,
+    cli_override: Option<&Path>,
+) -> anyhow::Result<PathBuf> {
+    if let Some(p) = cli_override {
+        return Ok(p.to_path_buf());
+    }
+    if let Some(rules) = &config.rules {
+        return Ok(workers_root.join(&rules.path));
+    }
+    iii_skill_core::bundle::find_content_root()
+        .map(|c| c.join("project-rules"))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "could not locate project-rules — pass --rules-dir, set rules.path \
+                 in .skill-check.yaml, or run a release-installed iii-skill-check \
+                 with bundled content"
+            )
+        })
+}
+
+/// Resolve `.vale.ini`. Order: CLI flag, sibling `.vale.ini` in workers_root, bundled.
+fn resolve_vale_config(
+    workers_root: &Path,
+    cli_override: Option<&Path>,
+) -> anyhow::Result<PathBuf> {
+    if let Some(p) = cli_override {
+        return Ok(p.to_path_buf());
+    }
+    let local = workers_root.join(".vale.ini");
+    if local.is_file() {
+        return Ok(local);
+    }
+    iii_skill_core::bundle::find_content_root()
+        .map(|c| c.join(".vale.ini"))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "could not locate .vale.ini — pass --vale-config, place a .vale.ini \
+                 next to .skill-check.yaml, or run a release-installed \
+                 iii-skill-check with bundled content"
+            )
+        })
 }
 
 fn run_verify_rendered(worker: &Path) -> anyhow::Result<()> {
