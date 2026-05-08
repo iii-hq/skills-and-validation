@@ -1,23 +1,24 @@
 use std::path::PathBuf;
 
-fn workers_dir() -> PathBuf {
+fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
+        .and_then(|p| p.parent())
         .unwrap()
         .to_path_buf()
 }
 
 #[test]
-fn read_manifest_parses_textstats() {
-    let textstats = workers_dir().join("textstats");
-    let manifest = iii_skill_check::introspect::read_manifest(&textstats)
-        .expect("read_manifest should succeed for textstats");
+fn read_manifest_parses_example_worker() {
+    let example = repo_root().join("fixtures/example-worker");
+    let manifest = iii_skill_check::introspect::read_manifest(&example)
+        .expect("read_manifest should succeed for example-worker");
 
     assert_eq!(manifest.name, "textstats");
     let desc = manifest
         .description
         .as_ref()
-        .expect("textstats has a description");
+        .expect("example-worker has a description");
     assert!(
         desc.starts_with("Text analysis on the iii bus"),
         "unexpected description: {desc}"

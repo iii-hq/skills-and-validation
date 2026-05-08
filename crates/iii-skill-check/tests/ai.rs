@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
-fn workers_dir() -> PathBuf {
+fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
+        .and_then(|p| p.parent())
         .unwrap()
         .to_path_buf()
 }
@@ -55,23 +56,23 @@ fn parse_response_returns_err_on_anything_other_than_pass() {
 }
 
 /// Live API smoke test: only runs when ANTHROPIC_API_KEY is set. Asserts that
-/// the textstats README passes the AI layer against the canonical project rules.
+/// the example-worker README passes the AI layer against the canonical project rules.
 /// Skipped in CI unless the key is wired in.
 #[test]
-fn ai_check_passes_textstats_readme_when_key_present() {
+fn ai_check_passes_example_readme_when_key_present() {
     if std::env::var("ANTHROPIC_API_KEY").is_err() {
-        eprintln!("skipping ai_check_passes_textstats_readme: ANTHROPIC_API_KEY not set");
+        eprintln!("skipping ai_check_passes_example_readme: ANTHROPIC_API_KEY not set");
         return;
     }
 
-    let workers_root = workers_dir();
-    let textstats_readme = workers_root.join("textstats").join("README.md");
-    let prompt_path = workers_root
-        .join("project-rules")
+    let root = repo_root();
+    let example_readme = root.join("fixtures/example-worker").join("README.md");
+    let prompt_path = root
+        .join("content/project-rules")
         .join("_skill-check-prompt.md");
     let prompt = std::fs::read_to_string(&prompt_path).unwrap();
 
-    let rules_dir = workers_root.join("project-rules");
+    let rules_dir = root.join("content/project-rules");
     let mut rules = String::new();
     let mut entries: Vec<_> = std::fs::read_dir(&rules_dir).unwrap().filter_map(|r| r.ok()).collect();
     entries.sort_by_key(|e| e.file_name());
@@ -89,7 +90,7 @@ fn ai_check_passes_textstats_readme_when_key_present() {
     }
 
     let result = iii_skill_check::ai::check_artifact(
-        &textstats_readme,
+        &example_readme,
         &rules,
         &prompt,
         "claude-opus-4-7",
@@ -100,6 +101,6 @@ fn ai_check_passes_textstats_readme_when_key_present() {
 
     assert!(
         result.is_ok(),
-        "expected PASS for textstats README, got: {result:?}"
+        "expected PASS for example-worker README, got: {result:?}"
     );
 }

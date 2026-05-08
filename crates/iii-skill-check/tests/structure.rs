@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-fn workers_dir() -> PathBuf {
+fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
+        .and_then(|p| p.parent())
         .unwrap()
         .to_path_buf()
 }
@@ -41,13 +42,13 @@ fn write_minimal_worker(dir: &Path, name: &str) {
 }
 
 #[test]
-fn textstats_passes_structure_check() {
-    let textstats = workers_dir().join("textstats");
+fn example_worker_passes_structure_check() {
+    let example = repo_root().join("fixtures/example-worker");
     let violations =
-        iii_skill_check::structure::check(&textstats).expect("structure check should not error");
+        iii_skill_check::structure::check(&example).expect("structure check should not error");
     assert!(
         violations.is_empty(),
-        "expected zero violations against textstats, got: {violations:?}"
+        "expected zero violations against example-worker, got: {violations:?}"
     );
 }
 

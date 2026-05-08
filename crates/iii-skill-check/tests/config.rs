@@ -1,15 +1,16 @@
 use std::path::PathBuf;
 
-fn workers_dir() -> PathBuf {
+fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
+        .and_then(|p| p.parent())
         .unwrap()
         .to_path_buf()
 }
 
 #[test]
-fn loads_workers_skill_check_yaml() {
-    let path = workers_dir().join(".skill-check.yaml");
+fn loads_template_skill_check_yaml() {
+    let path = repo_root().join("templates/.skill-check.yaml");
     let config = iii_skill_check::config::load(&path).expect("config should load");
     assert_eq!(config.ai_check.provider, "anthropic");
     assert_eq!(config.ai_check.model, "claude-opus-4-7");

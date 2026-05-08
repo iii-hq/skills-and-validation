@@ -1,30 +1,34 @@
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-fn workers_dir() -> PathBuf {
+fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
+        .and_then(|p| p.parent())
         .unwrap()
         .to_path_buf()
 }
 
-#[test]
-fn vale_passes_textstats_artifacts() {
-    let textstats = workers_dir().join("textstats");
-    let vale_config = workers_dir().join(".vale.ini");
+fn vale_config() -> PathBuf {
+    repo_root().join("content/.vale.ini")
+}
 
-    let readme = textstats.join("README.md");
-    let skill = textstats.join("skill.md");
-    let analyze = textstats.join("skills").join("analyze.md");
-    let diff = textstats.join("skills").join("diff.md");
-    let summarize = textstats.join("skills").join("summarize.md");
+#[test]
+fn vale_passes_example_artifacts() {
+    let example = repo_root().join("fixtures/example-worker");
+
+    let readme = example.join("README.md");
+    let skill = example.join("skill.md");
+    let analyze = example.join("skills").join("analyze.md");
+    let diff = example.join("skills").join("diff.md");
+    let summarize = example.join("skills").join("summarize.md");
     let artifacts: Vec<&std::path::Path> = vec![&readme, &skill, &analyze, &diff, &summarize];
 
     let violations =
-        iii_skill_check::vale::run(&artifacts, &vale_config).expect("vale should run");
+        iii_skill_check::vale::run(&artifacts, &vale_config()).expect("vale should run");
     assert!(
         violations.is_empty(),
-        "expected zero Vale violations on textstats, got: {violations:?}"
+        "expected zero Vale violations on example-worker, got: {violations:?}"
     );
 }
 
@@ -38,10 +42,9 @@ fn vale_flags_marketing_fluff_in_a_readme() {
     )
     .unwrap();
 
-    let vale_config = workers_dir().join(".vale.ini");
     let artifacts: Vec<&std::path::Path> = vec![&path];
 
-    let violations = iii_skill_check::vale::run(&artifacts, &vale_config).unwrap();
+    let violations = iii_skill_check::vale::run(&artifacts, &vale_config()).unwrap();
     assert!(
         violations
             .iter()
@@ -67,10 +70,9 @@ fn vale_flags_howto_teaching_phrase_in_skill() {
     )
     .unwrap();
 
-    let vale_config = workers_dir().join(".vale.ini");
     let artifacts: Vec<&std::path::Path> = vec![&path];
 
-    let violations = iii_skill_check::vale::run(&artifacts, &vale_config).unwrap();
+    let violations = iii_skill_check::vale::run(&artifacts, &vale_config()).unwrap();
     assert!(
         violations
             .iter()
