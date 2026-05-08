@@ -54,8 +54,17 @@ runs:
     - name: Install Vale
       shell: bash
       run: |
-        "${{ github.action_path }}/scripts/install-vale.sh" \
-          "${{ inputs.vale-version }}"
+        v="${{ inputs.vale-version }}"
+        case "$(uname -s)-$(uname -m)" in
+          Linux-x86_64)              asset="vale_${v}_Linux_64-bit.tar.gz" ;;
+          Linux-arm64|Linux-aarch64) asset="vale_${v}_Linux_arm64.tar.gz" ;;
+          Darwin-arm64)              asset="vale_${v}_macOS_arm64.tar.gz" ;;
+          Darwin-x86_64)             asset="vale_${v}_macOS_64-bit.tar.gz" ;;
+          *) echo "unsupported runner: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+        esac
+        curl -sL "https://github.com/errata-ai/vale/releases/download/v${v}/${asset}" \
+          | sudo tar -xz -C /usr/local/bin vale
+        vale --version
 
     - name: Verify workers
       shell: bash
