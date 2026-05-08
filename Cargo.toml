@@ -5,3 +5,6 @@ members = [
     "crates/iii-skill-render",
     "crates/iii-skill-check",
 ]
+
+[profile.release]
+strip = true
