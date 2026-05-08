@@ -7,7 +7,9 @@
 #                     $INSTALL_DIR/bin/iii-skill-check; bundle-adjacent
 #                     content lookup walks up from there.
 #
-# AI layer is dropped automatically when ANTHROPIC_API_KEY is unset.
+# The AI layer is dropped automatically when the env var named by
+# .skill-check.yaml's `api_key_env_var` field is unset (default
+# ANTHROPIC_API_KEY).
 
 set -euo pipefail
 
@@ -20,6 +22,11 @@ if [ ! -x "$BIN" ]; then
   echo "ERROR: iii-skill-check not found at $BIN — did you run download.sh first?" >&2
   exit 1
 fi
+
+# Resolve which env var carries the API key. Honors `api_key_env_var` in
+# the consumer's .skill-check.yaml (in CWD); falls back to ANTHROPIC_API_KEY.
+KEY_VAR="$(awk '/^[[:space:]]*api_key_env_var:/ {print $2; exit}' .skill-check.yaml 2>/dev/null || true)"
+KEY_VAR="${KEY_VAR:-ANTHROPIC_API_KEY}"
 
 fail=0
 shopt -s nullglob
@@ -36,10 +43,10 @@ for manifest in $WORKERS_GLOB; do
     fail=1
   fi
   effective_layers="$LAYERS"
-  if [ -z "${ANTHROPIC_API_KEY:-}" ] && [[ "$LAYERS" == *ai* ]]; then
+  if [ -z "${!KEY_VAR:-}" ] && [[ "$LAYERS" == *ai* ]]; then
     effective_layers="$(echo "$LAYERS" | sed -E 's/,?ai,?/,/g; s/^,//; s/,$//')"
     [ -z "$effective_layers" ] && effective_layers="structure"
-    echo "::warning::ANTHROPIC_API_KEY not set; running layers=$effective_layers"
+    echo "::warning::$KEY_VAR not set; running layers=$effective_layers"
   fi
   if ! "$BIN" verify "$dir" --layers "$effective_layers"; then
     fail=1
