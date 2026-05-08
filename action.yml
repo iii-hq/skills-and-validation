@@ -1,0 +1,68 @@
+name: skills-and-validation
+description: Validate worker README/skill artifacts via iii-skill-check
+author: iii-hq
+
+inputs:
+  version:
+    description: |
+      Pinned validator version (without the "v" prefix, e.g. 0.1.0).
+      Defaults to the version field in the consumer's .skill-check.yaml.
+    required: false
+  workers-glob:
+    description: Glob of worker manifests to verify (relative to GITHUB_WORKSPACE)
+    default: "*/iii.worker.yaml"
+  layers:
+    description: Comma-separated subset of layers to run (structure,vale,ai)
+    default: "structure,vale,ai"
+  vale-version:
+    description: Pinned Vale version
+    default: "3.14.1"
+  anthropic-api-key:
+    description: Anthropic API key for the AI layer (omit to skip AI)
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve version
+      id: ver
+      shell: bash
+      run: |
+        v="${{ inputs.version }}"
+        if [ -z "$v" ]; then
+          if [ ! -f .skill-check.yaml ]; then
+            echo "ERROR: 'version' input not given and .skill-check.yaml not found at workspace root" >&2
+            exit 1
+          fi
+          v="$(awk '/^version:/{print $2; exit}' .skill-check.yaml)"
+        fi
+        if [ -z "$v" ]; then
+          echo "ERROR: could not resolve a version" >&2
+          exit 1
+        fi
+        echo "version=$v" >> "$GITHUB_OUTPUT"
+
+    - name: Download iii-skill-check release
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        "${{ github.action_path }}/scripts/download.sh" \
+          "${{ steps.ver.outputs.version }}" \
+          "${{ github.workspace }}/.skill-check"
+
+    - name: Install Vale
+      shell: bash
+      run: |
+        "${{ github.action_path }}/scripts/install-vale.sh" \
+          "${{ inputs.vale-version }}"
+
+    - name: Verify workers
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        INSTALL_DIR: ${{ github.workspace }}/.skill-check
+      run: |
+        "${{ github.action_path }}/scripts/verify.sh" \
+          "${{ inputs.workers-glob }}" \
+          "${{ inputs.layers }}"
