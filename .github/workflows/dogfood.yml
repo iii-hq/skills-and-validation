@@ -1,0 +1,42 @@
+name: dogfood
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: dogfood-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  VALE_VERSION: "3.14.1"
+
+jobs:
+  verify-fixture:
+    name: verify fixtures/example-worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Vale ${{ env.VALE_VERSION }}
+        run: |
+          curl -sL "https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin vale
+          vale --version
+      - name: Build release binaries
+        run: cargo build --release --workspace
+      - name: verify-rendered (drift check)
+        run: ./target/release/iii-skill-check verify-rendered fixtures/example-worker
+      - name: verify (structure + vale + ai)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            layers="structure,vale,ai"
+          else
+            layers="structure,vale"
+            echo "::warning::ANTHROPIC_API_KEY not set; skipping AI layer"
+          fi
+          ./target/release/iii-skill-check verify fixtures/example-worker --layers "$layers"
