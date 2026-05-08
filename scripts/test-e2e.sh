@@ -4,7 +4,9 @@
 # Phases:
 #   A  workspace builds and tests (cargo build + cargo test)
 #   B  binaries render and verify the in-tree fixture
-#   C  AI layer (skipped unless ANTHROPIC_API_KEY is set)
+#   C  AI layer (skipped unless the env var named by
+#      templates/.skill-check.yaml's `api_key_env_var` is set;
+#      auto-loaded from .env if present and not already in the env)
 #   D  release tarball + extract + run-from-bundle (uses /tmp)
 #   E  scripts/verify.sh against the extracted bundle
 #
@@ -20,9 +22,15 @@ Usage: scripts/test-e2e.sh [flags]
 Flags:
   --clean     run `cargo clean` before phase A (slower but bulletproof
               against a stale CARGO_MANIFEST_DIR after a directory rename)
-  --no-ai     skip phase C even if ANTHROPIC_API_KEY is set
+  --no-ai     skip phase C even when the API key is set
   --keep-tmp  keep /tmp artifacts on success for inspection
   -h, --help  this message
+
+Auth:
+  Phase C reads the env-var name from templates/.skill-check.yaml's
+  `api_key_env_var` field. The value is taken from the existing
+  environment, or — if absent — sourced from a .env file at the repo
+  root. Existing env vars are never overridden.
 HELP
 }
 
@@ -41,6 +49,18 @@ done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
+
+# Resolve the env-var name the validator reads (per .skill-check.yaml's
+# `api_key_env_var` field) and, if that var isn't already in the
+# environment, populate it from .env. Existing env vars win over .env.
+KEY_VAR="$(awk '/^[[:space:]]*api_key_env_var:/ {print $2; exit}' templates/.skill-check.yaml 2>/dev/null || true)"
+KEY_VAR="${KEY_VAR:-ANTHROPIC_API_KEY}"
+if [ -z "${!KEY_VAR:-}" ] && [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
 
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64)              TRIPLE="aarch64-apple-darwin" ;;
@@ -130,10 +150,10 @@ phase C "AI layer (live API call)"
 # ----------------------------------------------------------------------
 if [ "$NO_AI" -eq 1 ]; then
   echo "(skipped: --no-ai flag)"
-elif [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-  echo "(skipped: ANTHROPIC_API_KEY not set)"
+elif [ -z "${!KEY_VAR:-}" ]; then
+  echo "(skipped: $KEY_VAR not set; checked environment and .env)"
 else
-  echo "+ iii-skill-check verify fixtures/example-worker --layers structure,vale,ai"
+  echo "+ iii-skill-check verify fixtures/example-worker --layers structure,vale,ai (auth via \$$KEY_VAR)"
   ./target/debug/iii-skill-check verify fixtures/example-worker --layers structure,vale,ai
 fi
 
@@ -172,13 +192,16 @@ echo "+ verify.sh structure,vale"
   INSTALL_DIR="$INSTALL_DIR" "$REPO_ROOT/scripts/verify.sh" "*/iii.worker.yaml" "structure,vale" )
 
 echo "+ verify.sh structure,vale,ai with no API key (should auto-strip ai)"
+# verify.sh's auto-strip checks the env-var name the consumer's config
+# specifies; we read the same name here so the test matches whatever
+# templates/.skill-check.yaml currently declares.
 (
   cd fixtures
-  unset ANTHROPIC_API_KEY
+  unset "$KEY_VAR"
   INSTALL_DIR="$INSTALL_DIR" "$REPO_ROOT/scripts/verify.sh" "*/iii.worker.yaml" "structure,vale,ai"
 ) | tee "$STRIP_LOG"
-if ! grep -q "ANTHROPIC_API_KEY not set" "$STRIP_LOG"; then
-  echo "ERROR: expected the ai-strip warning, did not see it in verify.sh output" >&2
+if ! grep -q "$KEY_VAR not set" "$STRIP_LOG"; then
+  echo "ERROR: expected the ai-strip warning ($KEY_VAR not set), did not see it" >&2
   exit 1
 fi
 

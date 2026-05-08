@@ -27,10 +27,22 @@ The whole system can be exercised locally before any tag is pushed. To run phase
 
 ```bash
 ./scripts/test-e2e.sh                    # add --clean if you just renamed the repo dir
-ANTHROPIC_API_KEY=sk-ant-… ./scripts/test-e2e.sh   # to also exercise the AI layer
 ```
 
-Or step through them manually below — each phase is independent.
+The script reads the env-var name from `templates/.skill-check.yaml`'s `api_key_env_var` field (default `ANTHROPIC_API_KEY`). The value is taken from your shell environment, or — if unset — sourced from `.env` at the repo root. So for the AI layer to run, either:
+
+```bash
+echo "ANTHROPIC_API_KEY=sk-ant-…" > .env       # gitignored
+./scripts/test-e2e.sh
+```
+
+or:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-… ./scripts/test-e2e.sh
+```
+
+Or step through phases manually below — each is independent.
 
 | Phase | What it validates                           | Network | Secrets             |
 | ----- | ------------------------------------------- | ------- | ------------------- |
