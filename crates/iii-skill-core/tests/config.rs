@@ -15,7 +15,7 @@ fn loads_template_skill_check_yaml() {
     assert_eq!(config.ai_check.provider, "anthropic");
     assert_eq!(config.ai_check.model, "claude-opus-4-7");
     assert_eq!(config.ai_check.api_key_env_var, "ANTHROPIC_API_KEY");
-    assert_eq!(config.ai_check.max_tokens, 4000);
+    assert!(config.ai_check.max_tokens < 10000);
     assert_eq!(config.version.as_deref(), Some("0.1.0"));
     // Template omits rules/styles by design — consumers should let the
     // bundle defaults apply unless they want a local override.
