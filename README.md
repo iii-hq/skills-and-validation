@@ -66,9 +66,10 @@ Add `~/.local/bin` to your `PATH` if it isn't already. Override either default w
 
 ### 3. Install the pre-commit hook
 
-In your consumer repo:
+The hook installs into whatever git repo you're currently in, so `cd` into the consumer repo first — running the script from somewhere else (including a clone of `skills-and-validation` itself) is almost never what you want, and the script will refuse if it detects it's being run from this repo.
 
 ```bash
+cd /path/to/your/consumer-repo
 ~/.local/share/skill-check/current/scripts/install-hook.sh
 ```
 

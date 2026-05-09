@@ -21,6 +21,20 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 1
 fi
 
+repo_root="$(git rev-parse --show-toplevel)"
+
+# Refuse to install into the skills-and-validation source repo itself —
+# detected by the action.yml's first line declaring `name: skills-and-validation`.
+if [ -f "$repo_root/action.yml" ] && \
+   [ "$(head -n 1 "$repo_root/action.yml")" = "name: skills-and-validation" ]; then
+  echo "ERROR: refusing to install the pre-commit hook into the skills-and-validation repository itself." >&2
+  echo >&2
+  echo "cd into the consumer repo (the one whose workers you want to validate) and run this script from there:" >&2
+  echo "  cd /path/to/your/consumer-repo" >&2
+  echo "  ~/.local/share/skill-check/current/scripts/install-hook.sh" >&2
+  exit 1
+fi
+
 git_dir="$(git rev-parse --git-dir)"
 hook_dst="$git_dir/hooks/pre-commit"
 
