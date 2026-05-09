@@ -16,7 +16,10 @@ fn loads_template_skill_check_yaml() {
     assert_eq!(config.ai_check.model, "claude-opus-4-7");
     assert_eq!(config.ai_check.api_key_env_var, "ANTHROPIC_API_KEY");
     assert!(config.ai_check.max_tokens < 10000);
-    assert_eq!(config.version.as_deref(), Some("0.1.0"));
+    // The in-tree template intentionally omits `version` — that field is for
+    // consumer repos pinning a release tag for the downloader, and the local
+    // test config is never piped through download.sh.
+    assert!(config.version.is_none());
     // Template omits rules/styles by design — consumers should let the
     // bundle defaults apply unless they want a local override.
     assert!(config.rules.is_none());

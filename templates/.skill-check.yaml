@@ -1,4 +1,4 @@
-version: 0.1.0
+version: 1
 ai_check:
   provider: anthropic
   model: claude-opus-4-7
