@@ -10,7 +10,7 @@ A small worker. The rendered quickstart binds the worker handle to a non-canonic
 iii worker add bad-sdk-worker
 ```
 
-`iii worker add` fetches the binary, writes a config block into `~/.iii/config.yaml`, and the engine starts the worker on the next `iii start`.
+`iii worker add` fetches the binary, writes a config block into `~/.iii/config.yaml`, and the engine starts the worker on the next `iii worker start`.
 
 ## Quickstart
 

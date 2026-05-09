@@ -73,7 +73,7 @@ fn render_readme(
     leaf_links: &[(String, String)],
 ) -> String {
     let mut install_section = format!(
-        "## Install\n\n```bash\niii worker add {name}\n```\n\n`iii worker add` fetches the binary, writes a config block into `~/.iii/config.yaml`, and the engine starts the worker on the next `iii start`."
+        "## Install\n\n```bash\niii worker add {name}\n```\n\n`iii worker add` fetches the binary, writes a config block into `~/.iii/config.yaml`, and the engine starts the worker on the next `iii worker start`."
     );
     if let Some(c) = companions {
         install_section.push_str("\n\n");
