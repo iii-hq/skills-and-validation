@@ -200,19 +200,16 @@ else
     fi
   done
 
-  # The response must cite the seeded violations by name.
-  if ! grep -qiE "blazing|welcome|revolutionary|magical|marketing" "$ai_log"; then
-    echo "ERROR: AI layer didn't cite a marketing/voice violation" >&2
-    rm -f "$ai_log"
-    exit 1
-  fi
-  if ! grep -qiE "nonexistent|broken link|iii://" "$ai_log"; then
-    echo "ERROR: AI layer didn't cite the broken iii:// link" >&2
+  # The response must cite at least one voice violation by name. (Broken
+  # iii:// links are structure-layer territory per the system prompt, so
+  # we don't require the AI to also cite them here.)
+  if ! grep -qiE "blazing|welcome|revolutionary|magical|marketing|fluff|tutorial|hedg" "$ai_log"; then
+    echo "ERROR: AI layer didn't cite a voice violation" >&2
     rm -f "$ai_log"
     exit 1
   fi
   rm -f "$ai_log"
-  echo "  (3/3 broken-worker artifacts flagged; voice + broken-link cited)"
+  echo "  (3/3 broken-worker artifacts flagged; voice violation cited)"
 fi
 
 # ----------------------------------------------------------------------

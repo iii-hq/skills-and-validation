@@ -226,20 +226,16 @@ fn ai_check_fails_broken_fixture_when_key_present() {
     print_ai_response("fails_broken_fixture", &result);
     let body = result.expect_err("expected FAIL for broken-worker README");
     let lower = body.to_lowercase();
-    // The broken README plants two distinct violations the model must catch
-    // for the test to mean anything: marketing fluff in the intro, and a
-    // broken iii:// link.
+    // Voice violations are the AI layer's core territory. The broken iii://
+    // link in the intro is also flagged by the structure layer (see
+    // tests/broken_fixture.rs::structure_broken_fails_with_multiple_violations),
+    // and the system prompt instructs the model to leave broken-link
+    // detection to other layers — so don't require the AI to cite it here.
     assert!(
-        ["blazing", "welcome", "revolutionary", "marketing", "fluff"]
+        ["blazing", "welcome", "revolutionary", "magical", "marketing", "fluff", "tutorial", "hedg"]
             .iter()
             .any(|kw| lower.contains(kw)),
-        "expected response to cite a marketing/voice keyword; got:\n{body}"
-    );
-    assert!(
-        lower.contains("nonexistent")
-            || lower.contains("broken link")
-            || lower.contains("iii://"),
-        "expected response to cite the broken iii:// link; got:\n{body}"
+        "expected response to cite at least one voice violation; got:\n{body}"
     );
 }
 
