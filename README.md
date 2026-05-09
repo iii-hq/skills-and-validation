@@ -134,8 +134,6 @@ Workers are authored by hand under `<worker>/docs/*.md`, then **rendered** into 
 curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash
 ```
 
-This downloads the latest stable release for your host into `~/.local/share/skill-check/<version>/`, points `~/.local/share/skill-check/current` at it, and symlinks `iii-skill-render` and `iii-skill-check` into `~/.local/bin/`. Add `~/.local/bin` to your `PATH` if it isn't already.
-
 Pin to a major.minor line or an exact version:
 
 ```bash
@@ -145,6 +143,26 @@ curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest
 curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh \
   | bash -s -- 0.1.3
 ```
+
+### Where the install lands
+
+```
+~/.local/share/skill-check/<version>/      # extracted release tarball
+                          /<version>/bin/  # iii-skill-{check,render} binaries
+                          /<version>/content/   # bundled rules + Vale styles + iii-skill-authoring
+                          /<version>/templates/ # .skill-check.yaml + example-worker
+                          /<version>/scripts/   # download.sh, verify.sh, pre-commit-hook.sh, install-hook.sh
+                          /current          # symlink → <version> (re-pointed on every install)
+~/.local/bin/iii-skill-render              # symlink → current/bin/iii-skill-render
+~/.local/bin/iii-skill-check               # symlink → current/bin/iii-skill-check
+```
+
+Add `~/.local/bin` to your `PATH` if it isn't already. Override either path with env vars before running install.sh:
+
+| Env var    | Default                       | Purpose                                                |
+| ---------- | ----------------------------- | ------------------------------------------------------ |
+| `SKV_DIR`  | `~/.local/share/skill-check`  | Where versioned release dirs and `current` symlink go |
+| `SKV_BIN`  | `~/.local/bin`                | Where the `iii-skill-{check,render}` shims land       |
 
 ### Pre-commit hook
 
