@@ -10,8 +10,19 @@
 # The AI layer is dropped automatically when the env var named by
 # .skill-check.yaml's `api_key_env_var` field is unset (default
 # ANTHROPIC_API_KEY).
+#
+# globstar is enabled so consumers can use `**/iii.worker.yaml` to walk
+# arbitrary subdirectory depth.
 
 set -euo pipefail
+shopt -s nullglob
+# globstar (the `**` recursive glob) needs bash 4+; macOS still ships
+# bash 3.2 by default. Enable it where available; on older bash the
+# script falls back to single-level globbing — consumers with deeper
+# layouts can pass multiple space-separated patterns instead.
+if (( BASH_VERSINFO[0] >= 4 )); then
+  shopt -s globstar
+fi
 
 WORKERS_GLOB="${1:-*/iii.worker.yaml}"
 LAYERS="${2:-structure,vale,ai}"
@@ -29,13 +40,13 @@ KEY_VAR="$(awk '/^[[:space:]]*api_key_env_var:/ {print $2; exit}' .skill-check.y
 KEY_VAR="${KEY_VAR:-ANTHROPIC_API_KEY}"
 
 fail=0
-shopt -s nullglob
-matched=0
+verified=0
+skipped=0
 for manifest in $WORKERS_GLOB; do
-  matched=1
   dir="$(dirname "$manifest")"
   if [ ! -d "$dir/docs" ]; then
     echo "::notice::skipping $dir (no docs/ partials yet)"
+    skipped=$((skipped + 1))
     continue
   fi
   echo "::group::$dir"
@@ -52,10 +63,15 @@ for manifest in $WORKERS_GLOB; do
     fail=1
   fi
   echo "::endgroup::"
+  verified=$((verified + 1))
 done
 
-if [ "$matched" -eq 0 ]; then
+total=$((verified + skipped))
+if [ "$total" -eq 0 ]; then
   echo "::warning::no manifests matched glob '$WORKERS_GLOB'"
+else
+  echo
+  echo "$verified verified, $skipped skipped (no docs/)"
 fi
 
 exit $fail
