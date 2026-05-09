@@ -151,7 +151,7 @@ curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest
                           /<version>/bin/  # iii-skill-{check,render} binaries
                           /<version>/content/   # bundled rules + Vale styles + iii-skill-authoring
                           /<version>/templates/ # .skill-check.yaml + example-worker
-                          /<version>/scripts/   # download.sh, verify.sh, pre-commit-hook.sh, install-hook.sh
+                          /<version>/scripts/   # ci-install.sh, verify.sh, pre-commit-hook.sh, install-hook.sh
                           /current          # symlink → <version> (re-pointed on every install)
 ~/.local/bin/iii-skill-render              # symlink → current/bin/iii-skill-render
 ~/.local/bin/iii-skill-check               # symlink → current/bin/iii-skill-check

@@ -54,7 +54,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        "${{ github.action_path }}/scripts/download.sh" \
+        "${{ github.action_path }}/scripts/ci-install.sh" \
           "${{ steps.ver.outputs.version }}" \
           "${{ github.workspace }}/.skill-check"
 

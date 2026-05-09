@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# download.sh — fetch + unpack a skills-and-validation release tarball.
+# ci-install.sh — fetch + unpack a skills-and-validation release tarball.
 #
-# Usage: download.sh <version> <dest-dir>
+# Usage: ci-install.sh <version> <dest-dir>
 #
 # Tries anonymous GitHub Releases download first. Only when the request
 # fails for an authentication-shaped reason (HTTP 401/403/404) does it

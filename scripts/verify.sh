@@ -30,7 +30,7 @@ LAYERS="${2:-structure,vale,ai}"
 INSTALL_DIR="${INSTALL_DIR:-$PWD/.skill-check}"
 BIN="$INSTALL_DIR/bin/iii-skill-check"
 if [ ! -x "$BIN" ]; then
-  echo "ERROR: iii-skill-check not found at $BIN — did you run download.sh first?" >&2
+  echo "ERROR: iii-skill-check not found at $BIN — did you run ci-install.sh first?" >&2
   exit 1
 fi
 

@@ -33,7 +33,7 @@ Always run `iii-skill-check render --write <worker>` before committing — the r
 
 1. Generated banner.
 2. `# <name>` (from `iii.worker.yaml.name`).
-3. `intro.md` (llm-only blocks kept as HTML comments).
+3. `intro.md`
 4. `## Install` + `iii worker add <name>` boilerplate, optionally followed by `companions.md` (no new H2).
 5. `## Quickstart` + `quickstart.md`.
 6. `## Configuration` + fenced `config.yaml`.
@@ -42,15 +42,19 @@ Always run `iii-skill-check render --write <worker>` before committing — the r
 
 ## Slot order in skill.md
 
+llm-only blocks will be unwrapped.
+
 1. Generated banner.
 2. `# <name>`.
-3. `intro.md` (llm-only blocks unwrapped).
-4. `companions.md` (llm-only blocks unwrapped, only if present).
+3. `intro.md`
+4. `companions.md`
 5. `## Additional Resources` — same leaf bullets as the README. Omitted when `docs/leaves/` is empty.
 
 ## Slot order in skills/<leaf>.md
 
+Leaves are for additional topics, not specific functions.
+
 1. Generated banner.
-2. `docs/leaves/<leaf>.md` (llm-only blocks unwrapped).
+2. `docs/leaves/<leaf>.md`
 
 The leaf author chooses the H1 — typically a topical phrase like `# Sizing text before provider calls`, not the function id. The renderer also uses that H1 as link text in the `## Additional Resources` section, so picking a descriptive phrase pays off twice.
