@@ -13,260 +13,104 @@ crates/iii-skill-core    — shared lib (render, structure, vale, ai, config, bu
 crates/iii-skill-render  — render-only binary (no network deps)
 crates/iii-skill-check   — verify + verify-rendered binary (Vale + AI)
 content/                 — project-rules, styles, iii-skill-authoring, .vale.ini
-templates/               — .skill-check.yaml the consumer copies into their repo
-templates/example-worker  — golden render fixture used by tests + dogfood
-scripts/                 — shared between the composite action and the workers' pre-commit hook
+templates/               — .skill-check.yaml + example-worker the consumer copies
+fixtures/                — intentionally broken/targeted workers used by tests
+scripts/                 — shared between the composite action and pre-commit hook
 action.yml               — composite action consumed via `uses: iii-hq/skills-and-validation@v1`
 ```
 
 ---
 
-## End-to-end test plan
+## Configuration: `.skill-check.yaml`
 
-The whole system can be exercised locally before any tag is pushed. To run phases A–E in one shot:
+Each consumer repo ships one `.skill-check.yaml` at the parent of its worker directories — typically the repo root when workers are top-level (`<repo>/<worker>/iii.worker.yaml`). The validator binary, the composite action, and the pre-commit hook all read it as the single source of truth for which release of `skills-and-validation` to use and how the AI layer authenticates.
 
-```bash
-./scripts/test-e2e.sh                    # add --clean if you just renamed the repo dir
+The recommended starting form (also shipped at `templates/.skill-check.yaml`):
+
+```yaml
+version: 0.1.0
+ai_check:
+  provider: anthropic
+  model: claude-opus-4-7
+  api_key_env_var: ANTHROPIC_API_KEY
+  max_tokens: 6000
 ```
 
-The script reads the env-var name from `templates/.skill-check.yaml`'s `api_key_env_var` field (default `ANTHROPIC_API_KEY`). The value is taken from your shell environment, or — if unset — sourced from `.env` at the repo root. So for the AI layer to run, either:
+| Field                     | Required | Purpose                                                                                                                                                                  |
+| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `version`                 | yes      | Pinned release tag (without the `v` prefix). The downloader fetches the matching tarball; the action picks up the same value.                                            |
+| `ai_check.provider`       | yes      | LLM provider for the AI layer. Currently only `anthropic` is supported.                                                                                                  |
+| `ai_check.model`          | yes      | Anthropic model id (e.g. `claude-opus-4-7`).                                                                                                                             |
+| `ai_check.api_key_env_var`| yes      | Name of the env var carrying the API key. The validator, the composite action, `scripts/verify.sh`, and `scripts/test-e2e.sh` all read this same field.                  |
+| `ai_check.max_tokens`     | yes      | Output token budget per AI call.                                                                                                                                         |
+| `rules.path`              | no       | Local override for `project-rules/`. Omit to use the rules bundled with the released validator.                                                                          |
+| `styles.path`             | no       | Local override for the Vale `styles/` dir. Omit to use the bundled styles.                                                                                               |
 
-```bash
-echo "ANTHROPIC_API_KEY=sk-ant-…" > .env       # gitignored
-./scripts/test-e2e.sh
-```
-
-or:
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-… ./scripts/test-e2e.sh
-```
-
-Or step through phases manually below — each is independent.
-
-| Phase | What it validates                           | Network | Secrets             |
-| ----- | ------------------------------------------- | ------- | ------------------- |
-| A     | Rust workspace builds and tests             | none    | none                |
-| B     | Binaries render and verify the fixture      | none    | none                |
-| C     | AI layer hits Anthropic and parses a PASS   | yes     | `ANTHROPIC_API_KEY` |
-| D     | Release tarball layout + bundle lookup      | none    | none                |
-| E     | Action scripts against a hand-built install | partial | none                |
-| F     | CI workflows on push                        | yes     | optional            |
-| G     | Composite action against a real release     | yes     | optional            |
+Bump `version` whenever you want a newer release of the validator; everything else is wiring you usually leave alone.
 
 ---
 
-### Phase A — workspace builds and tests
+## Use it in your repo
 
-```bash
-cargo clean
-cargo build --workspace
-cargo test --workspace --no-fail-fast
-```
+Add this to a workflow file in the consumer repo, e.g. `.github/workflows/skill-check.yml`:
 
-The AI-layer test is gated on `ANTHROPIC_API_KEY` and prints a skip message when unset, so phase A is offline-safe.
+```yaml
+name: skill-check
 
----
+on:
+  pull_request:
+  push:
+    branches: [main]
 
-### Phase B — binaries against the fixture (ie. test/example worker)
+permissions:
+  contents: read
+  pull-requests: write   # opt-in: enables the sticky PR comment.
+                         # Omit to keep just inline annotations + the run summary.
 
-```bash
-# render the fixture into memory (does not write)
-./target/debug/iii-skill-render templates/example-worker
-# -> rendered templates/example-worker (readme 2169 bytes, skill 616 bytes, 3 leaves)
-
-# write rendered artifacts to disk (idempotent — should produce no diff)
-./target/debug/iii-skill-render templates/example-worker --write
-git diff templates/example-worker
-# -> empty diff confirms the renderer is in sync with the golden fixture
-
-# drift check: re-renders, byte-compares against on-disk artifacts
-./target/debug/iii-skill-check verify-rendered templates/example-worker
-# -> rendered artifacts match templates/example-worker
-
-# structure + vale layers (no API key needed)
-./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale
-# -> verify clean across [structure,vale] for templates/example-worker
-```
-
-`vale` must be on `$PATH` for the vale layer. If you don't already have it, follow the upstream install instructions: https://docs.vale.sh/topics/installation
-
----
-
-### Phase C — AI layer (live API call)
-
-Five library tests, each printing the model's full response to stderr. Every test passes when the model behaves as expected — half check that clean content is accepted, half check that seeded violations are caught.
-
-| Test                                | Confirms                                   |
-| ----------------------------------- | ------------------------------------------ |
-| `ai_check_passes_example_readme`    | clean canary worker is accepted            |
-| `ai_check_fails_marketing_fluff`    | a synthetic fluffy README is rejected      |
-| `ai_check_fails_broken_fixture`     | the broken-worker README is rejected       |
-| `ai_check_flags_sdk_convention`     | a `let iii =` Rust block is flagged        |
-| `ai_check_flags_built_in_concept`   | a "built-in" worker framing is flagged     |
-
-Each FAIL-direction test also asserts specific violation keywords appear in the model's response, so a rejection-for-the-wrong-reason doesn't quietly satisfy the test.
-
-Each runs only when the env var named by `templates/.skill-check.yaml`'s `api_key_env_var` is set. Run them with the model responses surfaced:
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-… cargo test --workspace --no-fail-fast ai_check_ -- --show-output
-```
-
-Phase C then runs the binary against `templates/example-worker` (model must accept) and `fixtures/broken-worker` (model must reject) with `--layers ai`. The rejection run captures stderr to `/tmp/skill-check-broken-ai.log` and asserts:
-
-- Each of the three broken artifacts (README, skill.md, skills/example.md) is independently flagged
-- The aggregated response cites at least one voice violation by keyword
-
-`scripts/test-e2e.sh` does all of this in order; the script reads the API key from `.env` if not in the environment.
-
----
-
-### Phase D — release tarball + bundle-adjacent lookup
-
-This simulates what `.github/workflows/release.yml` will produce on `v*` tag pushes.
-
-```bash
-# 1. release-mode build (with strip = true)
-cargo build --release --workspace
-ls -lh target/release/iii-skill-{check,render}
-# -> ~3.9M and ~1.0M
-
-# 2. pack a tarball with the release layout
-TARGET="aarch64-apple-darwin"   # adjust to your host
-VERSION="0.1.0"
-NAME="skills-and-validation-${VERSION}-${TARGET}"
-mkdir -p "/tmp/$NAME"/{bin,content,templates}
-cp target/release/iii-skill-check  "/tmp/$NAME/bin/"
-cp target/release/iii-skill-render "/tmp/$NAME/bin/"
-cp -r content/.   "/tmp/$NAME/content/"
-cp -r templates/. "/tmp/$NAME/templates/"
-echo "$VERSION" > "/tmp/$NAME/VERSION"
-( cd /tmp && tar -czf "$NAME.tar.gz" "$NAME" )
-ls -lh /tmp/$NAME.tar.gz
-# -> ~2.3M
-
-# 3. extract somewhere clean and run from there
-rm -rf /tmp/install && mkdir /tmp/install
-tar -xzf "/tmp/$NAME.tar.gz" -C /tmp/install --strip-components=1
-ls /tmp/install
-# -> bin  content  templates  VERSION
-
-# 4. confirm bundle::find_content_root walks up from bin/ to sibling content/
-/tmp/install/bin/iii-skill-check verify-rendered templates/example-worker
-/tmp/install/bin/iii-skill-check verify templates/example-worker --layers structure,vale
-# both should print "verify clean"
-```
-
----
-
-### Phase E — scripts against the hand-built install
-
-`scripts/verify.sh` is what the composite action calls. It expects an `INSTALL_DIR` produced by `scripts/download.sh` (or, here, the manual one from phase D).
-
-```bash
-# verify the fixture using the install from phase D
-( cd fixtures
-  INSTALL_DIR=/tmp/install ../scripts/verify.sh "*/iii.worker.yaml" "structure,vale" )
-
-# AI-layer auto-strip when the key is unset
-( cd fixtures
-  unset ANTHROPIC_API_KEY
-  INSTALL_DIR=/tmp/install ../scripts/verify.sh "*/iii.worker.yaml" "structure,vale,ai" )
-# -> ::warning::ANTHROPIC_API_KEY not set; running layers=structure,vale
-# -> verify clean across [structure,vale]
-```
-
-`scripts/download.sh` cannot be tested end-to-end until phase G (a release exists). You can dry-run its triple detection:
-
-```bash
-bash -n scripts/download.sh && echo "syntax ok"
-# inspect the triple it would request:
-sh -c 'case "$(uname -s)-$(uname -m)" in
-  Darwin-arm64) echo aarch64-apple-darwin ;;
-  Darwin-x86_64) echo x86_64-apple-darwin ;;
-  Linux-x86_64) ldd --version 2>&1 | grep -qi musl && echo x86_64-unknown-linux-musl || echo x86_64-unknown-linux-gnu ;;
-  Linux-aarch64|Linux-arm64) ldd --version 2>&1 | grep -qi musl && echo aarch64-unknown-linux-musl || echo aarch64-unknown-linux-gnu ;;
-esac'
-```
-
----
-
-### Phase F — CI workflows on push
-
-After the first push to `origin/main`, three workflows fire:
-
-| Trigger             | Workflow      | What runs                                                                      |
-| ------------------- | ------------- | ------------------------------------------------------------------------------ |
-| PR / push to main   | `ci.yml`      | `cargo test --workspace`                                                       |
-| PR / push to main   | `dogfood.yml` | release build + `verify-rendered` + `verify` against `templates/example-worker` |
-| `v*` tag / dispatch | `release.yml` | 6-target build matrix → tarballs → GitHub Release                              |
-
-Watch them at `https://github.com/iii-hq/skills-and-validation/actions`.
-
-```bash
-# push commits and watch CI:
-git push origin main
-gh run watch --repo iii-hq/skills-and-validation         # blocks until current run finishes
-gh run list --repo iii-hq/skills-and-validation --limit 5
-```
-
-The dogfood job needs `ANTHROPIC_API_KEY` set as a repo secret to run the AI layer; without it, the layer is skipped with a workflow warning. Set it once:
-
-```bash
-gh secret set ANTHROPIC_API_KEY --repo iii-hq/skills-and-validation
-```
-
----
-
-### Phase G — cut the first release and exercise the composite action
-
-```bash
-# 1. tag and push (triggers release.yml)
-git tag v0.1.0
-git push origin v0.1.0
-gh run watch --repo iii-hq/skills-and-validation
-
-# 2. confirm the matrix produced 6 tarballs
-gh release view v0.1.0 --repo iii-hq/skills-and-validation
-# -> should list 6 .tar.gz + 6 .tar.gz.sha256 assets
-
-# 3. test the auth-on-failure-only download from a clean machine
-rm -rf /tmp/skill-check-install
-./scripts/download.sh 0.1.0 /tmp/skill-check-install
-# -> on a public repo: anonymous succeeds, no auth code path runs
-# -> on a private repo without `gh auth login` and without GITHUB_TOKEN:
-#    "Anonymous download returned HTTP 404; trying authenticated download..."
-#    "ERROR: Couldn't download ... gh auth login OR export GITHUB_TOKEN=..."
-
-# 4. test the action from a sister repo (or from workers once cut over)
-#    add this to .github/workflows/skill-check.yml in the consumer repo:
-#
-#    permissions:
-#      contents: read
-#      pull-requests: write       # opt-in: enables the sticky PR comment;
-#                                 # omit if you only want inline annotations
-#    jobs:
-#      verify:
-#        runs-on: ubuntu-latest
-#        steps:
-#          - uses: actions/checkout@v4
-#          - uses: iii-hq/skills-and-validation@v0.1.0
-#            with:
-#              anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+jobs:
+  skill-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: iii-hq/skills-and-validation@v0.1.0
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 ### What the consumer's PR shows
 
-Three layers of feedback, all from a single `uses:` line:
+Three layers of feedback, all driven by the validator's existing per-violation output:
 
-| Surface                          | Permission needed     | What appears                                            |
-| -------------------------------- | --------------------- | ------------------------------------------------------- |
-| Inline annotations (Files diff)  | none (always-on)      | red squiggle on each `path:line` the validator flagged  |
-| Run summary (Checks tab)         | none (always-on)      | markdown table of every violation + `N verified, M skipped` |
-| Sticky PR comment                | `pull-requests: write`| same markdown table as a PR comment that updates in place |
+| Surface                          | Permission needed       | What appears                                                |
+| -------------------------------- | ----------------------- | ----------------------------------------------------------- |
+| Inline annotations (Files diff)  | none (always-on)        | red squiggle on each `path:line` the validator flagged      |
+| Run summary (Checks tab)         | none (always-on)        | markdown table of every violation + `N verified, M skipped` |
+| Sticky PR comment                | `pull-requests: write`  | same markdown table, updated in place on each push          |
 
 Annotations and step summary are processed by the runner itself — no token, no API call, no opt-in. The PR-comment step uses the consumer's default `GITHUB_TOKEN` and runs only on `pull_request` events; without `pull-requests: write` it no-ops via `continue-on-error: true` rather than failing the run.
+
+### Action inputs
+
+| Input               | Default                  | Description                                                  |
+| ------------------- | ------------------------ | ------------------------------------------------------------ |
+| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix             |
+| `workers-glob`      | `*/iii.worker.yaml`      | Glob of worker manifests to verify                           |
+| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                      |
+| `vale-version`      | `3.14.1`                 | Pinned Vale version                                          |
+| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset      |
+
+---
+
+## Local end-to-end check
+
+```bash
+./scripts/test-e2e.sh                            # offline phases (build, fixtures, scripts)
+ANTHROPIC_API_KEY=sk-ant-… ./scripts/test-e2e.sh # also exercises the live AI layer
+```
+
+The script reads `api_key_env_var` from `templates/.skill-check.yaml` and auto-loads a matching `.env` file at the repo root if the value isn't already in the shell environment. `.env` is gitignored.
+
+Pass `--clean` if you've just renamed the repo directory (`CARGO_MANIFEST_DIR` is baked into test binaries at compile time and a stale `target/` cache will fail path-dependent tests until rebuilt).
 
 ---
 
@@ -274,12 +118,12 @@ Annotations and step summary are processed by the runner itself — no token, no
 
 Before pushing `v0.1.0`:
 
-- [ ] `./scripts/test-e2e.sh --clean` exits 0 (covers phases A–E)
-- [ ] `ANTHROPIC_API_KEY=sk-ant-… ./scripts/test-e2e.sh` exits 0 (also covers phase C)
+- [ ] `./scripts/test-e2e.sh --clean` exits 0
+- [ ] `ANTHROPIC_API_KEY=sk-ant-… ./scripts/test-e2e.sh` exits 0 (exercises the AI layer)
 - [ ] `git push origin main` is green on `ci.yml` + `dogfood.yml`
-- [ ] `ANTHROPIC_API_KEY` secret is set on the repo (otherwise dogfood AI layer is skipped silently in CI)
+- [ ] `ANTHROPIC_API_KEY` is set as a repo secret (otherwise dogfood's AI layer is silently skipped in CI)
 
-Tagging triggers `release.yml` and is irreversible (well, `gh release delete v0.1.0` is possible, but consumers may already have pinned it).
+Tagging triggers `release.yml` and is effectively irreversible once consumers pin to the tag.
 
 ---
 
@@ -288,17 +132,17 @@ Tagging triggers `release.yml` and is irreversible (well, `gh release delete v0.
 **`cargo test` fails on path-dependent tests after renaming the repo dir.**
 `CARGO_MANIFEST_DIR` is baked into the test binary at compile time. After a parent-directory rename, run `cargo clean` to force a rebuild with the new path.
 
-**Vale layer fails with "vale: command not found".**
+**Vale layer fails with `vale: command not found`.**
 Install Vale per the upstream docs: https://docs.vale.sh/topics/installation
 
 **`cross install --locked` fails in CI.**
 cross-rs occasionally lags behind cargo updates. Two fallback options:
 
 1. Pin a known-good version: `cargo install cross --version 0.2.5 --locked`.
-2. Replace cross with `cargo-zigbuild` in `release.yml` (no Docker, single runner can build all four Linux targets).
+2. Replace cross with `cargo-zigbuild` in `release.yml` (no Docker, single runner builds all four Linux targets).
 
 **Anonymous download returns 404 on a public repo.**
-Confirm the asset name matches `skills-and-validation-{version}-{target}.tar.gz` exactly (no `v` prefix on the version inside the asset name; the tag has the `v`, the asset doesn't).
+Confirm the asset name matches `skills-and-validation-{version}-{target}.tar.gz` exactly. The git tag has the `v` prefix; the asset filename does not.
 
 **Bundle lookup misses on local builds.**
 `bundle::find_content_root` walks up from the running binary looking for a `content/` dir with both `project-rules/` and `.vale.ini`. If you've moved the binary outside its bundle layout, pass `--rules-dir` and `--vale-config` explicitly to `iii-skill-check verify`.
