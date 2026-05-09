@@ -173,8 +173,11 @@ else
   #   ai_check_fails_broken_fixture     rejects broken-worker README
   #   ai_check_flags_sdk_convention     flags `let iii =` SDK drift
   #   ai_check_flags_built_in_concept   flags "built-in" worker framing
-  echo "+ cargo test ai_check_ -- --show-output  (auth via \$$KEY_VAR)"
-  cargo test --workspace --no-fail-fast ai_check_ -- --show-output
+  # Drop the workspace-wide name filter and target the ai test binary
+  # directly — keeps cargo from printing a "0 passed; N filtered" status
+  # block for every other test file in the workspace.
+  echo "+ cargo test -p iii-skill-core --test ai -- --show-output  (auth via \$$KEY_VAR)"
+  cargo test -p iii-skill-core --test ai -- --show-output --test-threads=1
 
   # Binary integration: PASS path through verify against the canary template.
   echo "+ iii-skill-check verify templates/example-worker --layers ai"
