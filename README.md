@@ -1,11 +1,112 @@
 # skills-and-validation
 
-> [!TIP]
-> **Authoring worker docs?** The release bundle ships an `iii-skill-authoring` install it with `npx skillkit add iii-hq/skills-and-validation/content/skills`. To surface it through the iii engine, add `.skill-check/content/skills/iii-skill-authoring/**/*.md` to the engine `config.yaml`'s `skills:` glob.
-
 Render and validate worker skill artifacts (`README.md`, `skill.md`, `skills/*.md`) against project-wide voice, structure, and Diataxis rules.
 
 Ships two binaries and a composite GitHub Action. Consumers pin a `version` in `.skill-check.yaml`; the action and the pre-commit hook download a matching release tarball.
+
+---
+
+## Setup
+
+Three things to install, in this order: the authoring skill bundle (so your tooling can read the conventions), the binaries (for local render + validation), and the pre-commit hook (so commits run the validator automatically).
+
+### 1. Install the iii-skill-authoring skill bundle
+
+The bundle is the canonical guide for worker docs — directory layout, renderer slots, voice rules, per-function leaves, llm-only block round-trip, and how to run `iii-skill-check` locally. Pick the surface that fits your tooling:
+
+**Through skillkit:**
+
+```bash
+cd $HOME && npx skillkit add iii-hq/skills-and-validation/content/skills
+```
+
+**Through the iii engine** (after step 2 below puts the bundle on disk under `~/.local/share/skill-check/current/content/skills/`):
+
+```yaml
+# in your iii engine config.yaml
+skills:
+  - ~/.local/share/skill-check/current/content/skills/iii-skill-authoring/**/*.md
+```
+
+Browse topics with `skillkit read iii-skill-authoring/<topic>`. The bundle covers `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`.
+
+### 2. Install the binaries
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash
+```
+
+Pin to a major.minor line or an exact version when you want reproducibility:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash -s -- 0.1
+# or
+curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash -s -- 0.1.5
+```
+
+Layout after install:
+
+```
+~/.local/share/skill-check/<version>/      # extracted release tarball
+                          /<version>/bin/  # iii-skill-{check,render} binaries
+                          /<version>/content/   # bundled rules + Vale styles + iii-skill-authoring
+                          /<version>/templates/ # .skill-check.yaml + example-worker
+                          /<version>/scripts/   # ci-install.sh, verify.sh, pre-commit-hook.sh, install-hook.sh
+                          /current          # symlink → <version> (re-pointed on every install)
+~/.local/bin/iii-skill-render              # symlink → current/bin/iii-skill-render
+~/.local/bin/iii-skill-check               # symlink → current/bin/iii-skill-check
+```
+
+Add `~/.local/bin` to your `PATH` if it isn't already. Override either default with `SKV_DIR` / `SKV_BIN` env vars before running install.sh:
+
+| Env var   | Default                      | Purpose                                               |
+| --------- | ---------------------------- | ----------------------------------------------------- |
+| `SKV_DIR` | `~/.local/share/skill-check` | Where versioned release dirs and `current` symlink go |
+| `SKV_BIN` | `~/.local/bin`               | Where the `iii-skill-{check,render}` shims land       |
+
+### 3. Install the pre-commit hook
+
+In your consumer repo:
+
+```bash
+~/.local/share/skill-check/current/scripts/install-hook.sh
+```
+
+The script symlinks `pre-commit-hook.sh` into `.git/hooks/pre-commit`. On every commit, the hook:
+
+1. Detects staged paths under any worker dir (`<worker>/iii.worker.yaml` + `<worker>/docs/`).
+2. Re-renders each affected worker with `iii-skill-render --write`.
+3. Re-stages the rendered `README.md`, `skill.md`, `skills/*.md`.
+4. Runs `iii-skill-check verify-rendered` + `iii-skill-check verify --layers structure,vale`.
+5. Blocks the commit on remaining violations.
+
+**The hook deliberately skips the AI layer** — it's slow and costs API tokens, so commits stay fast. CI runs the AI layer on every PR.
+
+To bypass the hook for a single commit: `git commit --no-verify`.
+
+### Running the AI layer manually
+
+The pre-commit hook never asks for an API key, and the offline `--layers structure,vale` path works without one. To run the AI layer at the terminal, set the env var named in your repo's `.skill-check.yaml` (defaults to `ANTHROPIC_API_KEY`):
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-…
+iii-skill-check verify <worker>                    # all three layers
+iii-skill-check verify <worker> --layers ai        # AI only — fastest signal
+```
+
+CI invokes the AI layer automatically. Set `ANTHROPIC_API_KEY` as a repo secret in your consumer repo for the CI run to use it; without the secret, CI runs structure + vale only and emits a workflow warning.
+
+### Upgrading
+
+Re-run `install.sh` whenever a new release lands — the `latest` tag floats to the most recent stable release, so the same one-liner installs the new version and re-points the symlinks.
+
+Both binaries check at runtime whether a newer release is available (via `https://api.github.com/repos/iii-hq/skills-and-validation/releases/latest`, cached for 24h at `~/.cache/skill-check/update-check.json`). When out of date, the binary prints the install command and exits with code 2 — pass `--allow-old-version` to proceed on the older binary anyway:
+
+```bash
+iii-skill-check verify <worker> --allow-old-version
+```
+
+To suppress the check entirely (offline runs, CI environments, scripted batch invocations), set `SKV_NO_UPDATE_CHECK=1`. The composite action and `scripts/test-e2e.sh` set this automatically — only interactive local runs hit the API.
 
 ---
 
@@ -86,13 +187,13 @@ Annotations and step summary are processed by the runner itself — no token, no
 
 ### Action inputs
 
-| Input               | Default                  | Description                                                                                                              |
-| ------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix                                                                         |
-| `workers-glob`      | `*/iii.worker.yaml`      | Glob of worker manifests to verify                                                                                       |
-| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                                                                                  |
-| `vale-version`      | `3.14.1`                 | Pinned Vale version                                                                                                      |
-| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                  |
+| Input               | Default                  | Description                                                                                                                        |
+| ------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix                                                                                   |
+| `workers-glob`      | `*/iii.worker.yaml`      | Glob of worker manifests to verify                                                                                                 |
+| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                                                                                            |
+| `vale-version`      | `3.14.1`                 | Pinned Vale version                                                                                                                |
+| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                            |
 | `write`             | `false`                  | Auto-render workers and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`. |
 
 ### Auto-fix mode (opt-in)
@@ -101,8 +202,8 @@ With `write: true` plus `contents: write`, the action runs `iii-skill-render --w
 
 ```yaml
 permissions:
-  contents: write          # required for auto-fix
-  pull-requests: write     # required for the sticky PR comment
+  contents: write # required for auto-fix
+  pull-requests: write # required for the sticky PR comment
 
 jobs:
   skill-check:
@@ -110,8 +211,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.head_ref }}     # check out the PR branch directly
-                                          # (not the merge commit) so push-back lands
+          ref:
+            ${{ github.head_ref }} # check out the PR branch directly
+            # (not the merge commit) so push-back lands
       - uses: iii-hq/skills-and-validation@v0.1
         with:
           write: true
@@ -121,93 +223,6 @@ jobs:
 The follow-up commit doesn't trigger another workflow run (GitHub's default `GITHUB_TOKEN` doesn't fire downstream `push`/`pull_request` events). Voice / structure violations the renderer can't fix on its own still show up in the verify output.
 
 Forks: write mode only works on PRs opened from the same repository; the consumer's `GITHUB_TOKEN` can't push to a fork. Validation-only mode (`write: false`, the default) works for both.
-
----
-
-## Local development
-
-Workers are authored by hand under `<worker>/docs/*.md`, then **rendered** into `README.md`, `skill.md`, and `skills/*.md`. The same byte-exact match the action enforces in CI is what `iii-skill-render --write` produces — so the easy-mode flow is to install the binaries locally and let a pre-commit hook keep things in sync.
-
-### One-line install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash
-```
-
-Pin to a major.minor line or an exact version:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh \
-  | bash -s -- 0.1
-# or
-curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh \
-  | bash -s -- 0.1.3
-```
-
-### Where the install lands
-
-```
-~/.local/share/skill-check/<version>/      # extracted release tarball
-                          /<version>/bin/  # iii-skill-{check,render} binaries
-                          /<version>/content/   # bundled rules + Vale styles + iii-skill-authoring
-                          /<version>/templates/ # .skill-check.yaml + example-worker
-                          /<version>/scripts/   # ci-install.sh, verify.sh, pre-commit-hook.sh, install-hook.sh
-                          /current          # symlink → <version> (re-pointed on every install)
-~/.local/bin/iii-skill-render              # symlink → current/bin/iii-skill-render
-~/.local/bin/iii-skill-check               # symlink → current/bin/iii-skill-check
-```
-
-Add `~/.local/bin` to your `PATH` if it isn't already. Override either path with env vars before running install.sh:
-
-| Env var    | Default                       | Purpose                                                |
-| ---------- | ----------------------------- | ------------------------------------------------------ |
-| `SKV_DIR`  | `~/.local/share/skill-check`  | Where versioned release dirs and `current` symlink go |
-| `SKV_BIN`  | `~/.local/bin`                | Where the `iii-skill-{check,render}` shims land       |
-
-### Pre-commit hook
-
-After install, run from the root of any consumer repo:
-
-```bash
-~/.local/share/skill-check/current/scripts/install-hook.sh
-```
-
-This symlinks the bundled `pre-commit-hook.sh` into `.git/hooks/pre-commit`. On every commit it:
-
-1. Detects which staged paths belong to a worker dir (has `iii.worker.yaml` + `docs/`).
-2. Re-renders each affected worker with `iii-skill-render --write`.
-3. Re-stages the rendered `README.md`, `skill.md`, `skills/*.md`.
-4. Runs `iii-skill-check verify-rendered` + `verify --layers structure,vale`.
-5. Blocks the commit on remaining violations. Bypass with `git commit --no-verify`.
-
-Skips the AI layer locally (slow + costs API tokens). CI runs the AI layer on every PR.
-
-### Manual usage
-
-```bash
-iii-skill-render <worker> --write       # render docs/* into README/skill/skills
-iii-skill-check verify-rendered <worker> # confirm no drift
-iii-skill-check verify <worker>          # all layers
-iii-skill-check verify <worker> --layers structure,vale   # skip AI
-```
-
-### Upgrading
-
-Re-run `install.sh` whenever a new release lands. The `latest` tag floats to the most recent stable release, so the same one-liner installs the new version and re-points the symlinks.
-
-Both binaries check at runtime whether a newer release is available (via `https://api.github.com/repos/iii-hq/skills-and-validation/releases/latest`, cached for 24h at `~/.cache/skill-check/update-check.json`). When out of date, the binary prints the install command and exits with code 2 — pass `--allow-old-version` to proceed on the older binary anyway:
-
-```bash
-iii-skill-check verify <worker> --allow-old-version
-```
-
-To suppress the check entirely (offline runs, CI environments, scripted batch invocations), set `SKV_NO_UPDATE_CHECK=1`:
-
-```bash
-SKV_NO_UPDATE_CHECK=1 iii-skill-check verify <worker>
-```
-
-The composite action and `scripts/test-e2e.sh` set this automatically — only interactive local runs hit the API.
 
 ---
 
