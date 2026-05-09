@@ -145,6 +145,14 @@ echo "+ iii-skill-check verify-rendered templates/example-worker"
 echo "+ iii-skill-check verify templates/example-worker --layers structure,vale"
 ./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale
 
+# Negative case: the deliberately-broken fixture must fail loudly.
+echo "+ iii-skill-check verify fixtures/broken-worker --layers structure,vale (should FAIL)"
+if ./target/debug/iii-skill-check verify fixtures/broken-worker --layers structure,vale 2>/dev/null; then
+  echo "ERROR: verify should have failed against fixtures/broken-worker" >&2
+  exit 1
+fi
+echo "  (correctly rejected — multiple layer violations)"
+
 # ----------------------------------------------------------------------
 phase C "AI layer (live API call)"
 # ----------------------------------------------------------------------
