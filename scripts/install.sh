@@ -93,6 +93,11 @@ mkdir -p "$SKV_BIN"
 ln -sf "$SKV_DIR/current/bin/iii-skill-check"  "$SKV_BIN/iii-skill-check"
 ln -sf "$SKV_DIR/current/bin/iii-skill-render" "$SKV_BIN/iii-skill-render"
 
+# Invalidate the runtime update-check cache so the next run hits the GitHub
+# API rather than reporting the previously-installed version as "latest".
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/skill-check"
+rm -f "$CACHE_DIR/update-check.json"
+
 echo "" >&2
 echo "Installed to $SKV_DIR/$VERSION" >&2
 echo "Symlinks: $SKV_BIN/iii-skill-{check,render}" >&2

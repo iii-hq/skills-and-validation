@@ -16,8 +16,10 @@ pub enum UpdateStatus {
         latest: String,
         install_cmd: String,
     },
-    /// The check was skipped (env var, dev build, network failure, parse failure).
-    Skipped { reason: String },
+    /// The check was skipped. `quiet` is true when the skip was intentional
+    /// (env var opt-out, dev build) and shouldn't be surfaced; false when
+    /// it was a failure mode (network, API, parse) the user should see.
+    Skipped { reason: String, quiet: bool },
 }
 
 /// Version baked into the binary at build time.
@@ -34,6 +36,40 @@ fn is_release_build() -> bool {
     option_env!("RELEASE_VERSION").is_some()
 }
 
+/// Run the update check and print user-facing output. When the running
+/// binary is out of date and `allow_old` is false, exits the process with
+/// status 2 — both `iii-skill-check` and `iii-skill-render` use this as
+/// their startup gate so they share identical messaging.
+///
+/// Output rules:
+/// - `OutOfDate`: prints the upgrade hint; exits if `!allow_old`.
+/// - `Skipped { quiet: true, .. }`: silent (intentional opt-out / dev build).
+/// - `Skipped { quiet: false, .. }`: prints a single stderr warning so the
+///   user can see *why* the check didn't fire (network, API, parse).
+/// - `UpToDate`: silent.
+pub fn run_gate(allow_old: bool) {
+    match check() {
+        UpdateStatus::OutOfDate {
+            current,
+            latest,
+            install_cmd,
+        } => {
+            eprintln!("warning: a newer release is available ({current} -> {latest})");
+            eprintln!("  install: {install_cmd}");
+            if !allow_old {
+                eprintln!();
+                eprintln!("re-run with --allow-old-version to proceed on the older binary");
+                std::process::exit(2);
+            }
+            eprintln!("  proceeding with the older binary (--allow-old-version)");
+        }
+        UpdateStatus::Skipped { reason, quiet: false } => {
+            eprintln!("warning: update check skipped: {reason}");
+        }
+        UpdateStatus::Skipped { quiet: true, .. } | UpdateStatus::UpToDate { .. } => {}
+    }
+}
+
 /// Run the update check and return the resulting status.
 ///
 /// Honors `SKV_NO_UPDATE_CHECK=1` (any non-empty value disables the check).
@@ -44,18 +80,20 @@ pub fn check() -> UpdateStatus {
     if std::env::var_os("SKV_NO_UPDATE_CHECK").is_some_and(|v| !v.is_empty()) {
         return UpdateStatus::Skipped {
             reason: "SKV_NO_UPDATE_CHECK is set".into(),
+            quiet: true,
         };
     }
     if !is_release_build() {
         return UpdateStatus::Skipped {
             reason: "running a dev build (RELEASE_VERSION unset at compile time)".into(),
+            quiet: true,
         };
     }
 
     let current = installed_version().to_string();
     let latest = match cached_or_fetched_latest() {
         Ok(v) => v,
-        Err(reason) => return UpdateStatus::Skipped { reason },
+        Err(reason) => return UpdateStatus::Skipped { reason, quiet: false },
     };
 
     if is_newer(&latest, &current) {
