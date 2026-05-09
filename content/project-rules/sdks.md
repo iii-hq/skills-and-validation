@@ -26,6 +26,12 @@ WebSocket reconnection with re-registration on disconnect is implemented by ever
 
 When showing or describing initialization, name the variable `worker`, not `iii`, so calls like `worker.registerFunction()` read naturally.
 
+Bind the handle immutably — it is created once and never reassigned. The keyword is language-specific:
+
+- **JS / TS / Node**: `const worker = ...` (not `let`)
+- **Rust**: `let worker = ...`
+- **Python**: `worker = ...`
+
 ## Auto-generation expectations
 
 SDK reference pages will eventually be auto-generated from code. The generator captures the surface — methods, types, signatures — but not narrative ("why use this SDK," migration guidance, when-to-pick-this-SDK).
