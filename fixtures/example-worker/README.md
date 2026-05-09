@@ -24,9 +24,9 @@ use serde_json::json;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let iii = register_worker("ws://localhost:49134", InitOptions::default());
+    let worker = register_worker("ws://localhost:49134", InitOptions::default());
 
-    let result = iii
+    let result = worker
         .trigger(TriggerRequest {
             function_id: "textstats::analyze".into(),
             payload: json!({ "text": "hello world\nlooks small" }),
