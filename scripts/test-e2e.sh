@@ -147,10 +147,10 @@ echo "+ iii-skill-check verify-rendered templates/example-worker"
 echo "+ iii-skill-check verify templates/example-worker --layers structure,vale"
 ./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale
 
-# Negative case: the deliberately-broken fixture must fail loudly.
-echo "+ iii-skill-check verify fixtures/broken-worker --layers structure,vale (should FAIL)"
+# Negative case: the deliberately-broken fixture must be rejected loudly.
+echo "+ iii-skill-check verify fixtures/broken-worker --layers structure,vale (expect non-zero exit)"
 if ./target/debug/iii-skill-check verify fixtures/broken-worker --layers structure,vale 2>/dev/null; then
-  echo "ERROR: verify should have failed against fixtures/broken-worker" >&2
+  echo "ERROR: verify exited 0 against fixtures/broken-worker; expected non-zero" >&2
   exit 1
 fi
 echo "  (correctly rejected — multiple layer violations)"
@@ -163,15 +163,16 @@ if [ "$NO_AI" -eq 1 ]; then
 elif [ -z "${!KEY_VAR:-}" ]; then
   echo "(skipped: $KEY_VAR not set; checked environment and .env)"
 else
-  # Five lib tests — each one prints the model's full response to stderr.
-  # Each FAIL test asserts specific keywords in the response so a wrong-
-  # reason FAIL doesn't masquerade as a pass.
+  # Five lib tests — each prints the model's full response to stderr.
+  # The negative-direction tests assert specific violation keywords appear
+  # in the response, so a rejection-for-the-wrong-reason doesn't quietly
+  # pass.
   #
-  #   ai_check_passes_example_readme            PASS    canary worker
-  #   ai_check_fails_marketing_fluff            FAIL    voice keywords
-  #   ai_check_fails_broken_fixture             FAIL    voice + broken-link
-  #   ai_check_flags_sdk_convention             FAIL    sdks.md violation
-  #   ai_check_flags_built_in_concept           FAIL    "built-in" framing
+  #   ai_check_passes_example_readme    accepts a clean canary worker
+  #   ai_check_fails_marketing_fluff    rejects fluffy synthetic README
+  #   ai_check_fails_broken_fixture     rejects broken-worker README
+  #   ai_check_flags_sdk_convention     flags `let iii =` SDK drift
+  #   ai_check_flags_built_in_concept   flags "built-in" worker framing
   echo "+ cargo test ai_check_ -- --show-output  (auth via \$$KEY_VAR)"
   cargo test --workspace --no-fail-fast ai_check_ -- --show-output
 
@@ -179,14 +180,14 @@ else
   echo "+ iii-skill-check verify templates/example-worker --layers ai"
   ./target/debug/iii-skill-check verify templates/example-worker --layers ai
 
-  # Binary integration: FAIL path against the broken fixture. Captures all
-  # three per-artifact AI responses so we can assert per-artifact granular
-  # behavior — every artifact must show up flagged, and the response must
-  # cite specific seeded violations.
+  # Binary integration: rejection path against the broken fixture. Captures
+  # all three per-artifact AI responses so we can assert per-artifact
+  # granular behavior — every artifact must show up flagged, and the
+  # response must cite specific seeded violations.
   ai_log="/tmp/skill-check-broken-ai.log"
-  echo "+ iii-skill-check verify fixtures/broken-worker --layers ai (should FAIL)"
+  echo "+ iii-skill-check verify fixtures/broken-worker --layers ai (expect non-zero exit)"
   if ./target/debug/iii-skill-check verify fixtures/broken-worker --layers ai 2>&1 | tee "$ai_log"; then
-    echo "ERROR: expected verify to fail on fixtures/broken-worker AI layer" >&2
+    echo "ERROR: verify exited 0 against the broken fixture; expected non-zero" >&2
     rm -f "$ai_log"
     exit 1
   fi

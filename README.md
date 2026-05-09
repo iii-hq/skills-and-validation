@@ -95,15 +95,17 @@ git diff templates/example-worker
 
 ### Phase C — AI layer (live API call)
 
-Five library tests, each printing the model's full response to stderr. Every FAIL test asserts specific violation keywords in the response so a wrong-reason FAIL is caught.
+Five library tests, each printing the model's full response to stderr. Every test passes when the model behaves as expected — half check that clean content is accepted, half check that seeded violations are caught.
 
-| Test                                          | Outcome | Asserts the response cites…       |
-| --------------------------------------------- | ------- | --------------------------------- |
-| `ai_check_passes_example_readme`              | PASS    | (response is `PASS`)              |
-| `ai_check_fails_marketing_fluff`              | FAIL    | a voice/marketing keyword         |
-| `ai_check_fails_broken_fixture`               | FAIL    | a voice keyword + the broken link |
-| `ai_check_flags_sdk_convention`               | FAIL    | the sdks.md initialization rule   |
-| `ai_check_flags_built_in_concept`             | FAIL    | the "built-in" framing            |
+| Test                                | Confirms                                   |
+| ----------------------------------- | ------------------------------------------ |
+| `ai_check_passes_example_readme`    | clean canary worker is accepted            |
+| `ai_check_fails_marketing_fluff`    | a synthetic fluffy README is rejected      |
+| `ai_check_fails_broken_fixture`     | the broken-worker README is rejected       |
+| `ai_check_flags_sdk_convention`     | a `let iii =` Rust block is flagged        |
+| `ai_check_flags_built_in_concept`   | a "built-in" worker framing is flagged     |
+
+Each FAIL-direction test also asserts specific violation keywords appear in the model's response, so a rejection-for-the-wrong-reason doesn't quietly satisfy the test.
 
 Each runs only when the env var named by `templates/.skill-check.yaml`'s `api_key_env_var` is set. Run them with the model responses surfaced:
 
@@ -111,10 +113,10 @@ Each runs only when the env var named by `templates/.skill-check.yaml`'s `api_ke
 ANTHROPIC_API_KEY=sk-ant-… cargo test --workspace --no-fail-fast ai_check_ -- --show-output
 ```
 
-Phase C also runs the binary against `templates/example-worker` (must PASS) and `fixtures/broken-worker` (must FAIL) with `--layers ai`. The broken-worker run captures stderr to `/tmp/skill-check-broken-ai.log` and asserts:
+Phase C then runs the binary against `templates/example-worker` (model must accept) and `fixtures/broken-worker` (model must reject) with `--layers ai`. The rejection run captures stderr to `/tmp/skill-check-broken-ai.log` and asserts:
 
 - Each of the three broken artifacts (README, skill.md, skills/example.md) is independently flagged
-- The aggregated response cites a marketing keyword and the broken `iii://` link
+- The aggregated response cites at least one voice violation by keyword
 
 `scripts/test-e2e.sh` does all of this in order; the script reads the API key from `.env` if not in the environment.
 
