@@ -21,11 +21,41 @@ VERSION="${1:?missing version arg}"
 DEST="${2:?missing dest-dir arg}"
 REPO="iii-hq/skills-and-validation"
 
-# --- resolve major.minor to latest patch ----------------------------------
-# Consumers can pin "0.1" in .skill-check.yaml to track every patch on the
-# 0.1.* line without editing the file each release. Anything matching a
-# full X.Y.Z (with optional pre-release suffix) is used as-is.
-if [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+# --- resolve floating refs to a concrete X.Y.Z -----------------------------
+# Consumers can pass:
+#   "latest"  → resolve via /releases/latest (the most recent stable release)
+#   "0"       → highest 0.*.* release
+#   "0.1"     → highest 0.1.* release
+#   "0.1.5"   → used as-is (matches the X.Y.Z regex below)
+# Anything matching X.Y.Z (with optional pre-release suffix) is used as-is.
+if [ "$VERSION" = "latest" ]; then
+  echo "resolving 'latest' from $REPO releases..." >&2
+  api="https://api.github.com/repos/${REPO}/releases/latest"
+  http=$(curl -sL -o /tmp/skv-releases.json -w '%{http_code}' "$api" 2>/dev/null || echo "000")
+  if [ "$http" = "401" ] || [ "$http" = "403" ] || [ "$http" = "404" ]; then
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+      gh api "repos/${REPO}/releases/latest" > /tmp/skv-releases.json
+      http=200
+    elif [ -n "${GITHUB_TOKEN:-}" ]; then
+      http=$(curl -sL -o /tmp/skv-releases.json -w '%{http_code}' \
+        -H "Authorization: Bearer ${GITHUB_TOKEN}" "$api")
+    fi
+  fi
+  if [ "$http" != "200" ]; then
+    echo "ERROR: GitHub API returned $http resolving 'latest' from $REPO" >&2
+    exit 1
+  fi
+  resolved=$(grep -E '"tag_name"' /tmp/skv-releases.json \
+    | sed -E 's/.*"tag_name": *"v([0-9]+\.[0-9]+\.[0-9]+)".*/\1/' \
+    | head -1)
+  rm -f /tmp/skv-releases.json
+  if [ -z "$resolved" ]; then
+    echo "ERROR: couldn't parse tag_name from /releases/latest response" >&2
+    exit 1
+  fi
+  echo "resolved to $resolved" >&2
+  VERSION="$resolved"
+elif [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
   echo "resolving '$VERSION' to latest patch in $REPO..." >&2
   api="https://api.github.com/repos/${REPO}/releases?per_page=100"
   http=$(curl -sL -o /tmp/skv-releases.json -w '%{http_code}' "$api" 2>/dev/null || echo "000")
