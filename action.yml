@@ -52,7 +52,7 @@ runs:
       run: |
         "${{ github.action_path }}/scripts/ci-install.sh" \
           "${{ steps.ver.outputs.version }}" \
-          "${{ github.workspace }}/.skill-check"
+          "${{ runner.temp }}/skill-check"
 
     # Render every matching worker into the CI workspace so the verify step
     # below always operates on fresh artifacts. Without this, an out-of-sync
@@ -73,7 +73,7 @@ runs:
       env:
         SKV_NO_UPDATE_CHECK: "1"
       run: |
-        bin="${{ github.workspace }}/.skill-check/bin/iii-skill-render"
+        bin="${{ runner.temp }}/skill-check/bin/iii-skill-render"
         preflight_log="${RUNNER_TEMP:-/tmp}/skv-preflight.log"
         : > "$preflight_log"
         shopt -s nullglob globstar 2>/dev/null || shopt -s nullglob
@@ -109,7 +109,18 @@ runs:
           fi
         done
 
-        if [ -n "$(git status --porcelain)" ]; then
+        # Scope drift detection to the rendered artifacts so unrelated
+        # untracked files in the consumer's workspace don't trigger an
+        # auto-commit. (The install dir lives in $RUNNER_TEMP now, but
+        # this also guards against future accidental in-workspace state.)
+        drift_paths=""
+        for manifest in ${{ inputs.workers-glob }}; do
+          dir="$(dirname "$manifest")"
+          [ -d "$dir/docs" ] || continue
+          drift_paths+=" $dir/README.md $dir/skill.md $dir/skills"
+        done
+        if [ -n "$drift_paths" ] \
+           && [ -n "$(git status --porcelain -- $drift_paths 2>/dev/null)" ]; then
           echo "drift=present" >> "$GITHUB_OUTPUT"
           echo "rendered output drifted from sources; verify will run against the fresh artifacts."
         else
@@ -143,7 +154,7 @@ runs:
       shell: bash
       env:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        INSTALL_DIR: ${{ github.workspace }}/.skill-check
+        INSTALL_DIR: ${{ runner.temp }}/skill-check
         SKV_NO_UPDATE_CHECK: "1"
       run: |
         set -o pipefail
@@ -188,6 +199,12 @@ runs:
     # `if:` (`success()`) takes care of the verify-passed gate so the bot
     # never pushes content the action hasn't validated; that's the whole
     # point of moving this step *after* verify.
+    #
+    # The add-set is scoped to per-worker `README.md`, `skill.md`, and
+    # `skills/` so anything else in the workspace (consumer's tooling
+    # output, action install dir, ad-hoc temp files) can't slip into the
+    # bot's commit. A previous `git add -A` shipped 4.6 MB of bundled
+    # binaries into a consumer PR.
     - name: Commit and push rendered diff (write mode)
       if: ${{ inputs.write == 'true' && github.event_name == 'pull_request' && steps.render.outputs.drift == 'present' }}
       shell: bash
@@ -196,7 +213,25 @@ runs:
       run: |
         git config user.name  "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add -A
+
+        shopt -s nullglob globstar 2>/dev/null || shopt -s nullglob
+        for manifest in ${{ inputs.workers-glob }}; do
+          dir="$(dirname "$manifest")"
+          [ -d "$dir/docs" ] || continue
+          # `2>/dev/null || true`: workers that didn't render still have
+          # their old (or missing) README.md/skill.md — `git add` on a
+          # nonexistent path errors, but we want to keep going.
+          git add "$dir/README.md" "$dir/skill.md" 2>/dev/null || true
+          # `git add -A <dir>/skills/` captures both new leaves and stale
+          # ones the renderer cleaned up.
+          git add -A "$dir/skills/" 2>/dev/null || true
+        done
+
+        if git diff --cached --quiet; then
+          echo "no rendered worker artifacts to commit (drift was outside the scoped add-set)"
+          exit 0
+        fi
+
         git commit -m "chore: auto-render worker docs"
         # GITHUB_HEAD_REF is the PR branch on the head repo. Push needs
         # contents: write, which the consumer's workflow grants explicitly
