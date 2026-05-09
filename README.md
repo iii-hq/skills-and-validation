@@ -95,16 +95,23 @@ git diff fixtures/example-worker
 
 ### Phase C — AI layer (live API call)
 
+Two complementary library tests run only when `ANTHROPIC_API_KEY` (or whatever `api_key_env_var` resolves to) is set:
+
+- `ai_check_passes_example_readme_when_key_present` — the clean fixture must PASS.
+- `ai_check_fails_marketing_fluff_when_key_present` — a synthetic README full of marketing fluff, tutorial-speak, and hedging must FAIL.
+
+Both print the model's full response either way. Cargo captures stdout/stderr by default; pass `--show-output` to see responses on passing tests:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-… cargo test --workspace --no-fail-fast ai_check_ -- --show-output
+```
+
+Or run the binary directly against the clean fixture:
+
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-…
 ./target/debug/iii-skill-check verify fixtures/example-worker --layers structure,vale,ai
 # -> verify clean across [structure,vale,ai] for fixtures/example-worker
-```
-
-The library test `ai_check_passes_example_readme_when_key_present` exercises the same path:
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-… cargo test --workspace --no-fail-fast ai_check_passes
 ```
 
 ---
