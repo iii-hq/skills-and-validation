@@ -121,8 +121,10 @@ if [ "$CLEAN" -eq 1 ]; then
 fi
 echo "+ cargo build --workspace"
 cargo build --workspace
-echo "+ cargo test --workspace --no-fail-fast"
-cargo test --workspace --no-fail-fast
+# Live-API tests (ai_check_*) run in phase C with --show-output so the
+# model's responses surface; skip them here to avoid double-billing.
+echo "+ cargo test --workspace --no-fail-fast (skipping ai_check_*; see phase C)"
+cargo test --workspace --no-fail-fast -- --skip ai_check_
 
 # ----------------------------------------------------------------------
 phase B "binaries against templates/example-worker"
@@ -161,8 +163,56 @@ if [ "$NO_AI" -eq 1 ]; then
 elif [ -z "${!KEY_VAR:-}" ]; then
   echo "(skipped: $KEY_VAR not set; checked environment and .env)"
 else
-  echo "+ iii-skill-check verify templates/example-worker --layers structure,vale,ai (auth via \$$KEY_VAR)"
-  ./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale,ai
+  # Five lib tests — each one prints the model's full response to stderr.
+  # Each FAIL test asserts specific keywords in the response so a wrong-
+  # reason FAIL doesn't masquerade as a pass.
+  #
+  #   ai_check_passes_example_readme            PASS    canary worker
+  #   ai_check_fails_marketing_fluff            FAIL    voice keywords
+  #   ai_check_fails_broken_fixture             FAIL    voice + broken-link
+  #   ai_check_flags_sdk_convention             FAIL    sdks.md violation
+  #   ai_check_flags_built_in_concept           FAIL    "built-in" framing
+  echo "+ cargo test ai_check_ -- --show-output  (auth via \$$KEY_VAR)"
+  cargo test --workspace --no-fail-fast ai_check_ -- --show-output
+
+  # Binary integration: PASS path through verify against the canary template.
+  echo "+ iii-skill-check verify templates/example-worker --layers ai"
+  ./target/debug/iii-skill-check verify templates/example-worker --layers ai
+
+  # Binary integration: FAIL path against the broken fixture. Captures all
+  # three per-artifact AI responses so we can assert per-artifact granular
+  # behavior — every artifact must show up flagged, and the response must
+  # cite specific seeded violations.
+  ai_log="/tmp/skill-check-broken-ai.log"
+  echo "+ iii-skill-check verify fixtures/broken-worker --layers ai (should FAIL)"
+  if ./target/debug/iii-skill-check verify fixtures/broken-worker --layers ai 2>&1 | tee "$ai_log"; then
+    echo "ERROR: expected verify to fail on fixtures/broken-worker AI layer" >&2
+    rm -f "$ai_log"
+    exit 1
+  fi
+
+  # Each broken-worker artifact must be flagged independently.
+  for art in README.md skill.md skills/example.md; do
+    if ! grep -q "fixtures/broken-worker/$art" "$ai_log"; then
+      echo "ERROR: AI layer didn't flag fixtures/broken-worker/$art" >&2
+      rm -f "$ai_log"
+      exit 1
+    fi
+  done
+
+  # The response must cite the seeded violations by name.
+  if ! grep -qiE "blazing|welcome|revolutionary|magical|marketing" "$ai_log"; then
+    echo "ERROR: AI layer didn't cite a marketing/voice violation" >&2
+    rm -f "$ai_log"
+    exit 1
+  fi
+  if ! grep -qiE "nonexistent|broken link|iii://" "$ai_log"; then
+    echo "ERROR: AI layer didn't cite the broken iii:// link" >&2
+    rm -f "$ai_log"
+    exit 1
+  fi
+  rm -f "$ai_log"
+  echo "  (3/3 broken-worker artifacts flagged; voice + broken-link cited)"
 fi
 
 # ----------------------------------------------------------------------

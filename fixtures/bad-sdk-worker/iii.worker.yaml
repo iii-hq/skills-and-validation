@@ -1,0 +1,7 @@
+iii: v1
+name: bad-sdk-worker
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: bad-sdk-worker
+description: Targeted AI-layer fixture for SDK convention drift.

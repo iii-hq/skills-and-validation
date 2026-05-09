@@ -1,0 +1,7 @@
+iii: v1
+name: bad-concept-worker
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: bad-concept-worker
+description: Targeted AI-layer fixture for worker concept drift.

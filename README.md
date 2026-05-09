@@ -95,24 +95,28 @@ git diff templates/example-worker
 
 ### Phase C — AI layer (live API call)
 
-Two complementary library tests run only when `ANTHROPIC_API_KEY` (or whatever `api_key_env_var` resolves to) is set:
+Five library tests, each printing the model's full response to stderr. Every FAIL test asserts specific violation keywords in the response so a wrong-reason FAIL is caught.
 
-- `ai_check_passes_example_readme_when_key_present` — the clean fixture must PASS.
-- `ai_check_fails_marketing_fluff_when_key_present` — a synthetic README full of marketing fluff, tutorial-speak, and hedging must FAIL.
+| Test                                          | Outcome | Asserts the response cites…       |
+| --------------------------------------------- | ------- | --------------------------------- |
+| `ai_check_passes_example_readme`              | PASS    | (response is `PASS`)              |
+| `ai_check_fails_marketing_fluff`              | FAIL    | a voice/marketing keyword         |
+| `ai_check_fails_broken_fixture`               | FAIL    | a voice keyword + the broken link |
+| `ai_check_flags_sdk_convention`               | FAIL    | the sdks.md initialization rule   |
+| `ai_check_flags_built_in_concept`             | FAIL    | the "built-in" framing            |
 
-Both print the model's full response either way. Cargo captures stdout/stderr by default; pass `--show-output` to see responses on passing tests:
+Each runs only when the env var named by `templates/.skill-check.yaml`'s `api_key_env_var` is set. Run them with the model responses surfaced:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-… cargo test --workspace --no-fail-fast ai_check_ -- --show-output
 ```
 
-Or run the binary directly against the clean fixture:
+Phase C also runs the binary against `templates/example-worker` (must PASS) and `fixtures/broken-worker` (must FAIL) with `--layers ai`. The broken-worker run captures stderr to `/tmp/skill-check-broken-ai.log` and asserts:
 
-```bash
-export ANTHROPIC_API_KEY=sk-ant-…
-./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale,ai
-# -> verify clean across [structure,vale,ai] for templates/example-worker
-```
+- Each of the three broken artifacts (README, skill.md, skills/example.md) is independently flagged
+- The aggregated response cites a marketing keyword and the broken `iii://` link
+
+`scripts/test-e2e.sh` does all of this in order; the script reads the API key from `.env` if not in the environment.
 
 ---
 

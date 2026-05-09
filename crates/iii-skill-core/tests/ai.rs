@@ -187,9 +187,16 @@ That is all there is to it!
     .expect("API call should not error");
 
     print_ai_response("fails_marketing_fluff", &result);
+    let body = result.expect_err("expected FAIL for fluffy README");
+    let lower = body.to_lowercase();
+    // Granular: the response must cite at least one of the planted phrases
+    // by name, otherwise the FAIL is for some other reason and the test
+    // isn't actually validating the voice rules.
     assert!(
-        result.is_err(),
-        "expected FAIL for an obviously-fluffy README; see printed response above"
+        ["welcome", "blazing", "revolutionary", "magical", "marketing", "fluff", "tutorial"]
+            .iter()
+            .any(|kw| lower.contains(kw)),
+        "expected response to cite at least one marketing/voice keyword; got:\n{body}"
     );
 }
 
@@ -217,8 +224,87 @@ fn ai_check_fails_broken_fixture_when_key_present() {
     .expect("API call should not error");
 
     print_ai_response("fails_broken_fixture", &result);
+    let body = result.expect_err("expected FAIL for broken-worker README");
+    let lower = body.to_lowercase();
+    // The broken README plants two distinct violations the model must catch
+    // for the test to mean anything: marketing fluff in the intro, and a
+    // broken iii:// link.
     assert!(
-        result.is_err(),
-        "expected FAIL for the broken-worker README; see printed response above"
+        ["blazing", "welcome", "revolutionary", "marketing", "fluff"]
+            .iter()
+            .any(|kw| lower.contains(kw)),
+        "expected response to cite a marketing/voice keyword; got:\n{body}"
+    );
+    assert!(
+        lower.contains("nonexistent")
+            || lower.contains("broken link")
+            || lower.contains("iii://"),
+        "expected response to cite the broken iii:// link; got:\n{body}"
+    );
+}
+
+/// Live API: targeted fixture for `sdks.md` initialization-variable rule.
+/// The Rust quickstart binds the worker handle to `iii` instead of `worker`;
+/// the AI must cite that specific drift.
+#[test]
+fn ai_check_flags_sdk_convention_when_key_present() {
+    if std::env::var("ANTHROPIC_API_KEY").is_err() {
+        eprintln!("skipping ai_check_flags_sdk_convention: ANTHROPIC_API_KEY not set");
+        return;
+    }
+
+    let readme = repo_root()
+        .join("fixtures/bad-sdk-worker")
+        .join("README.md");
+    let result = iii_skill_core::ai::check_artifact(
+        &readme,
+        &load_rules(),
+        &load_prompt(),
+        "claude-opus-4-7",
+        "ANTHROPIC_API_KEY",
+        4000,
+    )
+    .expect("API call should not error");
+
+    print_ai_response("flags_sdk_convention", &result);
+    let body = result.expect_err("expected FAIL — SDK init variable convention");
+    let lower = body.to_lowercase();
+    assert!(
+        lower.contains("`iii`")
+            || lower.contains("variable")
+            || lower.contains("sdks.md")
+            || lower.contains("initialization"),
+        "expected response to cite the sdks.md initialization-variable rule; got:\n{body}"
+    );
+}
+
+/// Live API: targeted fixture for the worker-concept rule. The intro
+/// describes the worker as "built-in"; the AI must cite that framing.
+#[test]
+fn ai_check_flags_built_in_concept_when_key_present() {
+    if std::env::var("ANTHROPIC_API_KEY").is_err() {
+        eprintln!("skipping ai_check_flags_built_in_concept: ANTHROPIC_API_KEY not set");
+        return;
+    }
+
+    let readme = repo_root()
+        .join("fixtures/bad-concept-worker")
+        .join("README.md");
+    let result = iii_skill_core::ai::check_artifact(
+        &readme,
+        &load_rules(),
+        &load_prompt(),
+        "claude-opus-4-7",
+        "ANTHROPIC_API_KEY",
+        4000,
+    )
+    .expect("API call should not error");
+
+    print_ai_response("flags_built_in_concept", &result);
+    let body = result.expect_err("expected FAIL — built-in concept violation");
+    let lower = body.to_lowercase();
+    assert!(
+        lower.contains("built-in"),
+        "expected response to cite the 'built-in' concept violation; got:\n{body}"
     );
 }

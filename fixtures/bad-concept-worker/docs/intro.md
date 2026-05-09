@@ -1,0 +1,1 @@
+A built-in worker that ships with the iii engine. Built-in workers are tied to the engine release cycle and update only when the engine itself updates.
