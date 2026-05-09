@@ -38,16 +38,19 @@ Always run `iii-skill-check render --write <worker>` before committing — the r
 5. `## Quickstart` + `quickstart.md`.
 6. `## Configuration` + fenced `config.yaml`.
 7. `## Migration notes` + `migration.md` (only if present).
+8. `## Additional Resources` — one bullet per leaf, linking `skills/<leaf>.md` with the leaf's H1 as link text. Omitted when `docs/leaves/` is empty.
 
 ## Slot order in skill.md
 
 1. Generated banner.
 2. `# <name>`.
 3. `intro.md` (llm-only blocks unwrapped).
+4. `companions.md` (llm-only blocks unwrapped, only if present).
+5. `## Additional Resources` — same leaf bullets as the README. Omitted when `docs/leaves/` is empty.
 
 ## Slot order in skills/<leaf>.md
 
 1. Generated banner.
 2. `docs/leaves/<leaf>.md` (llm-only blocks unwrapped).
 
-The leaf author chooses the H1 — typically a topical phrase like `# Sizing text before provider calls`, not the function id.
+The leaf author chooses the H1 — typically a topical phrase like `# Sizing text before provider calls`, not the function id. The renderer also uses that H1 as link text in the `## Additional Resources` section, so picking a descriptive phrase pays off twice.

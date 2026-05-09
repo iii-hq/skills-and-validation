@@ -54,7 +54,7 @@ Optional second paragraph that LLM agents see but human readers do not.
 
 ## `docs/quickstart.md`
 
-Use a four-backtick outer fence when the partial contains its own fenced code block (the example below contains a triple-backtick `rust` block):
+Show one fenced block per language the worker is callable from — Rust, TypeScript, and Python. Use a four-backtick outer fence around the partial since each block uses triple-backtick fences inside:
 
 ````markdown
 ```rust
@@ -63,9 +63,9 @@ use serde_json::json;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let iii = register_worker("ws://localhost:49134", InitOptions::default());
+    let worker = register_worker("ws://localhost:49134", InitOptions::default());
 
-    let result = iii
+    let result = worker
         .trigger(TriggerRequest {
             function_id: "<worker>::<verb>".into(),
             payload: json!({ /* realistic input */ }),
@@ -77,6 +77,32 @@ async fn main() -> anyhow::Result<()> {
     println!("{result:#?}");
     Ok(())
 }
+```
+
+```typescript
+import { registerWorker } from 'iii-sdk'
+
+const worker = registerWorker('ws://localhost:49134')
+
+const result = await worker.trigger({
+  function_id: '<worker>::<verb>',
+  payload: { /* realistic input */ },
+})
+
+console.log(result)
+```
+
+```python
+from iii import register_worker
+
+worker = register_worker("ws://localhost:49134")
+
+result = worker.trigger({
+    "function_id": "<worker>::<verb>",
+    "payload": { },  # realistic input
+})
+
+print(result)
 ```
 
 The example calls `<worker>::<verb>`. Other entry points: `<worker>::<verb-2>`, `<worker>::<verb-3>`.
