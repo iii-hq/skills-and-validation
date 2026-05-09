@@ -1,5 +1,8 @@
 # skills-and-validation
 
+> [!TIP]
+> **Authoring worker docs?** The release bundle ships an `iii-skill-authoring` skill bundle at `.skill-check/content/iii-skill-authoring/` after `scripts/download.sh` (or after the action runs). Browse with `skillkit read iii-skill-authoring/<topic>` — topics include `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`. To surface the bundle through the iii engine, add `.skill-check/content/iii-skill-authoring/skills/**/*.md` to the engine `config.yaml`'s `skills:` glob.
+
 Render and validate worker skill artifacts (`README.md`, `skill.md`, `skills/*.md`) against project-wide voice, structure, and Diataxis rules.
 
 Ships two binaries and a composite GitHub Action. Consumers pin a `version` in `.skill-check.yaml`; the action and the pre-commit hook download a matching release tarball.
