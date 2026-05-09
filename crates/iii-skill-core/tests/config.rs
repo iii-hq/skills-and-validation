@@ -61,3 +61,78 @@ fn errors_when_version_is_not_an_integer() {
     let result = iii_skill_core::config::load(tmp.path());
     assert!(result.is_err(), "expected an error when version is non-integer");
 }
+
+#[test]
+fn v1_implicitly_resolves_to_worker_mode() {
+    use iii_skill_core::config::Mode;
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        tmp.path(),
+        "version: 1\nai_check:\n  provider: anthropic\n  model: m\n  api_key_env_var: K\n  max_tokens: 100\n",
+    )
+    .unwrap();
+    let config = iii_skill_core::config::load(tmp.path()).expect("v1 config should load");
+    assert_eq!(config.resolved_mode(), Mode::Worker);
+    assert!(config.mode.is_none(), "v1 leaves the `mode` field unset");
+}
+
+#[test]
+fn v2_requires_explicit_mode() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        tmp.path(),
+        "version: 2\nai_check:\n  provider: anthropic\n  model: m\n  api_key_env_var: K\n  max_tokens: 100\n",
+    )
+    .unwrap();
+    let result = iii_skill_core::config::load(tmp.path());
+    assert!(
+        result.is_err(),
+        "v2 without `mode:` should fail; got: {:?}",
+        result.map(|_| "ok")
+    );
+}
+
+#[test]
+fn v2_docs_mode_loads_with_globs() {
+    use iii_skill_core::config::Mode;
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        tmp.path(),
+        "version: 2\nmode: docs\ndocs:\n  include:\n    - \"**/*.mdx\"\n  exclude:\n    - \"**/CHANGELOG.md\"\nai_check:\n  provider: anthropic\n  model: m\n  api_key_env_var: K\n  max_tokens: 100\n",
+    )
+    .unwrap();
+    let config = iii_skill_core::config::load(tmp.path()).expect("v2 docs mode should load");
+    assert_eq!(config.resolved_mode(), Mode::Docs);
+    let docs = config.docs.as_ref().expect("docs block present");
+    assert_eq!(docs.include, vec!["**/*.mdx".to_string()]);
+    assert_eq!(docs.exclude, vec!["**/CHANGELOG.md".to_string()]);
+}
+
+#[test]
+fn v2_docs_mode_without_docs_block_errors() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        tmp.path(),
+        "version: 2\nmode: docs\nai_check:\n  provider: anthropic\n  model: m\n  api_key_env_var: K\n  max_tokens: 100\n",
+    )
+    .unwrap();
+    let result = iii_skill_core::config::load(tmp.path());
+    assert!(
+        result.is_err(),
+        "docs mode without docs:include should fail"
+    );
+}
+
+#[test]
+fn v2_worker_mode_loads_without_docs_block() {
+    use iii_skill_core::config::Mode;
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        tmp.path(),
+        "version: 2\nmode: worker\nai_check:\n  provider: anthropic\n  model: m\n  api_key_env_var: K\n  max_tokens: 100\n",
+    )
+    .unwrap();
+    let config = iii_skill_core::config::load(tmp.path()).expect("v2 worker mode should load");
+    assert_eq!(config.resolved_mode(), Mode::Worker);
+    assert!(config.docs.is_none());
+}

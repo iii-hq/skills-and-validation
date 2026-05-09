@@ -1,7 +1,9 @@
 pub mod ai;
 pub mod bundle;
 pub mod config;
+pub mod docs;
 pub mod introspect;
+pub mod llm_only;
 pub mod render;
 pub mod structure;
 pub mod update_check;

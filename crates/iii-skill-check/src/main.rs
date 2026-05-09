@@ -4,7 +4,10 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "iii-skill-check", about = "Validate worker README/skill artifacts against project rules")]
+#[command(
+    name = "iii-skill-check",
+    about = "Validate worker README/skill or docs skill artifacts against project rules"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -15,9 +18,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run all configured layers against a worker.
+    /// Run all configured layers against a worker dir or docs root.
     Verify {
-        worker: PathBuf,
+        /// Worker directory (worker mode) or docs root (docs mode).
+        target: PathBuf,
         /// Subset of layers to run: structure,vale,ai (comma-separated).
         #[arg(long, default_value = "structure,vale,ai")]
         layers: String,
@@ -27,12 +31,13 @@ enum Command {
         rules_dir: Option<PathBuf>,
         /// Override the Vale config (.vale.ini). Resolution order:
         /// this flag, then sibling `.vale.ini` next to `.skill-check.yaml`,
-        /// then bundled `.vale.ini`.
+        /// then bundled `.vale.ini`. Ignored in docs mode (vale config is
+        /// generated per run from the in-scope docs' frontmatter types).
         #[arg(long)]
         vale_config: Option<PathBuf>,
     },
     /// Re-render and diff against checked-in artifacts; non-zero on drift.
-    VerifyRendered { worker: PathBuf },
+    VerifyRendered { target: PathBuf },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -40,27 +45,95 @@ fn main() -> anyhow::Result<()> {
     iii_skill_core::update_check::run_gate(cli.allow_old_version);
     match cli.command {
         Command::Verify {
-            worker,
+            target,
             layers,
             rules_dir,
             vale_config,
-        } => run_verify(&worker, &layers, rules_dir, vale_config),
-        Command::VerifyRendered { worker } => run_verify_rendered(&worker),
+        } => dispatch_verify(&target, &layers, rules_dir, vale_config),
+        Command::VerifyRendered { target } => dispatch_verify_rendered(&target),
     }
 }
 
-fn run_verify(
-    worker: &Path,
+fn dispatch_verify(
+    target: &Path,
     layers: &str,
     rules_override: Option<PathBuf>,
     vale_override: Option<PathBuf>,
 ) -> anyhow::Result<()> {
-    let workers_root = worker
+    let (config_path, config) = load_controlling_config(target)?;
+    let workers_root = config_path
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("worker dir has no parent: {}", worker.display()))?;
-    let config_path = workers_root.join(".skill-check.yaml");
-    let config = iii_skill_core::config::load(&config_path)?;
+        .ok_or_else(|| anyhow::anyhow!("`.skill-check.yaml` has no parent dir"))?;
+    match config.resolved_mode() {
+        iii_skill_core::config::Mode::Worker => verify_worker(
+            target,
+            workers_root,
+            &config,
+            layers,
+            rules_override,
+            vale_override,
+        ),
+        iii_skill_core::config::Mode::Docs => {
+            verify_docs(workers_root, &config, layers, rules_override)
+        }
+    }
+}
 
+fn dispatch_verify_rendered(target: &Path) -> anyhow::Result<()> {
+    let (config_path, config) = load_controlling_config(target)?;
+    let root = config_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("`.skill-check.yaml` has no parent dir"))?;
+    match config.resolved_mode() {
+        iii_skill_core::config::Mode::Worker => verify_rendered_worker(target),
+        iii_skill_core::config::Mode::Docs => verify_rendered_docs(root, &config),
+    }
+}
+
+/// Walk up from `target` to the nearest `.skill-check.yaml` and load it.
+/// All dispatch starts here so the mode field is the single source of
+/// truth for which validation surface to run.
+fn load_controlling_config(
+    target: &Path,
+) -> anyhow::Result<(PathBuf, iii_skill_core::config::Config)> {
+    let path = find_skill_check_yaml(target).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no `.skill-check.yaml` found at or above {}",
+            target.display()
+        )
+    })?;
+    let config = iii_skill_core::config::load(&path)?;
+    Ok((path, config))
+}
+
+fn find_skill_check_yaml(start: &Path) -> Option<PathBuf> {
+    let mut cur = if start.is_file() {
+        start.parent()?.to_path_buf()
+    } else {
+        start.to_path_buf()
+    };
+    loop {
+        let candidate = cur.join(".skill-check.yaml");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        cur = match cur.parent() {
+            Some(p) => p.to_path_buf(),
+            None => return None,
+        };
+    }
+}
+
+// --- worker mode (existing) -----------------------------------------------
+
+fn verify_worker(
+    worker: &Path,
+    workers_root: &Path,
+    config: &iii_skill_core::config::Config,
+    layers: &str,
+    rules_override: Option<PathBuf>,
+    vale_override: Option<PathBuf>,
+) -> anyhow::Result<()> {
     let layer_set: HashSet<&str> = layers.split(',').map(|s| s.trim()).collect();
     let artifacts = enumerate_rendered_artifacts(worker);
 
@@ -99,23 +172,157 @@ fn run_verify(
         }
     }
 
-    if !all_violations.is_empty() {
-        for v in &all_violations {
+    report(&all_violations, &ai_failures, layers, &worker.display().to_string())
+}
+
+fn verify_rendered_worker(worker: &Path) -> anyhow::Result<()> {
+    let drift = iii_skill_core::render::check_rendered(worker)?;
+    if !drift.is_empty() {
+        for d in &drift {
+            eprintln!("{d}");
+        }
+        anyhow::bail!(
+            "rendered artifacts are out of date — run `iii-skill-render <worker> --write`"
+        );
+    }
+    println!("rendered artifacts match {}", worker.display());
+    Ok(())
+}
+
+// --- docs mode -------------------------------------------------------------
+
+fn verify_docs(
+    root: &Path,
+    config: &iii_skill_core::config::Config,
+    layers: &str,
+    rules_override: Option<PathBuf>,
+) -> anyhow::Result<()> {
+    let docs_config = config
+        .docs
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("docs mode but `.skill-check.yaml` has no `docs:` block"))?;
+
+    let layer_set: HashSet<&str> = layers.split(',').map(|s| s.trim()).collect();
+    let docs = iii_skill_core::docs::enumerate::enumerate(root, docs_config)?;
+    if docs.is_empty() {
+        eprintln!("::warning::no docs matched docs.include / docs.exclude in {}", root.display());
+    }
+
+    let mut all_violations: Vec<iii_skill_core::structure::Violation> = Vec::new();
+    let mut ai_failures: Vec<(PathBuf, String)> = Vec::new();
+
+    // Resolve frontmatter once per doc; each layer reuses the type.
+    let mut typed: Vec<(iii_skill_core::docs::enumerate::DiscoveredDoc, iii_skill_core::docs::frontmatter::DocType)> =
+        Vec::new();
+    for doc in &docs {
+        if layer_set.contains("structure") {
+            all_violations.extend(iii_skill_core::docs::structure::check_source(&doc.abs));
+        }
+        // Try to recover the doc type. If frontmatter is broken, structure
+        // already flagged it; vale + ai then skip this doc rather than
+        // failing the whole run with a noisy error.
+        let body = match std::fs::read_to_string(&doc.abs) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("warning: skipping {} (can't read: {e})", doc.rel);
+                continue;
+            }
+        };
+        if let Ok(parsed) = iii_skill_core::docs::frontmatter::parse(&body) {
+            typed.push((doc.clone(), parsed.frontmatter.doc_type));
+        }
+    }
+
+    if layer_set.contains("vale") && !typed.is_empty() {
+        let styles_path = resolve_styles_path()?;
+        let skill_paths: Vec<(PathBuf, iii_skill_core::docs::frontmatter::DocType)> = typed
+            .iter()
+            .map(|(d, ty)| (d.skill_path(), *ty))
+            .collect();
+        let refs: Vec<(&Path, iii_skill_core::docs::frontmatter::DocType)> = skill_paths
+            .iter()
+            .map(|(p, ty)| (p.as_path(), *ty))
+            .collect();
+        let cfg = iii_skill_core::docs::vale_config::build(&refs, &styles_path);
+        let tmp = tempfile::TempDir::new().context("creating temp dir for vale config")?;
+        let cfg_path = tmp.path().join(".vale.ini");
+        std::fs::write(&cfg_path, cfg).context("writing runtime vale config")?;
+        let artifact_paths: Vec<&Path> = skill_paths.iter().map(|(p, _)| p.as_path()).collect();
+        all_violations.extend(iii_skill_core::vale::run(&artifact_paths, &cfg_path)?);
+    }
+
+    if layer_set.contains("ai") && !typed.is_empty() {
+        let rules_dir = resolve_rules_dir(root, config, rules_override.as_deref())?;
+        let rules = load_project_rules(&rules_dir)?;
+        let prompt_path = rules_dir.join("_skill-check-prompt.md");
+        let system_prompt = std::fs::read_to_string(&prompt_path)
+            .with_context(|| format!("reading {}", prompt_path.display()))?;
+        for (doc, ty) in &typed {
+            let skill = doc.skill_path();
+            match iii_skill_core::ai::check_artifact_with_type(
+                &skill,
+                &rules,
+                &system_prompt,
+                *ty,
+                &config.ai_check.model,
+                &config.ai_check.api_key_env_var,
+                config.ai_check.max_tokens,
+            )? {
+                Ok(()) => {}
+                Err(body) => ai_failures.push((skill, body)),
+            }
+        }
+    }
+
+    report(&all_violations, &ai_failures, layers, &root.display().to_string())
+}
+
+fn verify_rendered_docs(
+    root: &Path,
+    config: &iii_skill_core::config::Config,
+) -> anyhow::Result<()> {
+    let docs_config = config
+        .docs
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("docs mode but `.skill-check.yaml` has no `docs:` block"))?;
+    let drift = iii_skill_core::docs::check_rendered::check_rendered(root, docs_config)?;
+    if !drift.is_empty() {
+        for d in &drift {
+            eprintln!("{d}");
+        }
+        anyhow::bail!(
+            "docs skill artifacts are out of date — run `iii-skill-render <docs-root> --write`"
+        );
+    }
+    println!("docs skill artifacts match sources in {}", root.display());
+    Ok(())
+}
+
+// --- shared helpers --------------------------------------------------------
+
+fn report(
+    violations: &[iii_skill_core::structure::Violation],
+    ai_failures: &[(PathBuf, String)],
+    layers: &str,
+    target_label: &str,
+) -> anyhow::Result<()> {
+    if !violations.is_empty() {
+        for v in violations {
             let line = v.line.map(|l| format!(":{l}")).unwrap_or_default();
             eprintln!("{}{} — {}", v.file, line, v.message);
         }
     }
     if !ai_failures.is_empty() {
-        for (path, body) in &ai_failures {
+        for (path, body) in ai_failures {
             eprintln!("\n[AI] {}\n{}", path.display(), body);
         }
     }
 
-    let total = all_violations.len() + ai_failures.len();
+    let total = violations.len() + ai_failures.len();
     if total > 0 {
         anyhow::bail!("{total} violation(s) across layers [{layers}]");
     }
-    println!("verify clean across [{layers}] for {}", worker.display());
+    println!("verify clean across [{layers}] for {target_label}");
     Ok(())
 }
 
@@ -165,16 +372,21 @@ fn resolve_vale_config(
         })
 }
 
-fn run_verify_rendered(worker: &Path) -> anyhow::Result<()> {
-    let drift = iii_skill_core::render::check_rendered(worker)?;
-    if !drift.is_empty() {
-        for d in &drift {
-            eprintln!("{d}");
-        }
-        anyhow::bail!("rendered artifacts are out of date — run `iii-skill-render <worker> --write`");
-    }
-    println!("rendered artifacts match {}", worker.display());
-    Ok(())
+/// Resolve the styles directory for docs-mode runtime vale configs. The
+/// generated `.vale.ini` references it via `StylesPath = <here>`. Same
+/// fallback chain as `resolve_vale_config` minus the CLI flag (no override
+/// for docs mode yet).
+fn resolve_styles_path() -> anyhow::Result<String> {
+    let bundle_root = iii_skill_core::bundle::find_content_root().ok_or_else(|| {
+        anyhow::anyhow!(
+            "could not locate bundled content — install via scripts/install.sh \
+             (drops styles into ~/.local/share/skill-check/current/content/styles/)"
+        )
+    })?;
+    Ok(bundle_root
+        .join("styles")
+        .to_string_lossy()
+        .into_owned())
 }
 
 fn enumerate_rendered_artifacts(worker: &Path) -> Vec<PathBuf> {
