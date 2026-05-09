@@ -26,11 +26,29 @@ WebSocket reconnection with re-registration on disconnect is implemented by ever
 
 When showing or describing initialization, name the variable `worker`, not `iii`, so calls like `worker.registerFunction()` read naturally.
 
-Bind the handle immutably — it is created once and never reassigned. The keyword is language-specific:
+Bind the handle immutably — it is created once and never reassigned. `register_worker` (or `registerWorker` in TS/JS) returns the handle directly in every SDK; no `?`, `.await`, `await`, or other async unwrap belongs on the bind line. The connection is established lazily on the first call.
 
-- **JS / TS / Node**: `const worker = ...` (not `let`)
-- **Rust**: `let worker = ...`
-- **Python**: `worker = ...`
+The exact form is language-specific:
+
+- **Rust** — `let worker = ...` (immutable by default; no `mut`):
+
+  ```rust
+  let worker = register_worker("ws://localhost:49134", InitOptions::default());
+  ```
+
+- **TypeScript / JavaScript / Node** — `const worker = ...` (not `let`):
+
+  ```typescript
+  const worker = registerWorker("ws://localhost:49134");
+  ```
+
+- **Python** — plain assignment, no keyword:
+
+  ```python
+  worker = register_worker("ws://localhost:49134")
+  ```
+
+In every case, the handle is then used directly: `worker.trigger(...)`, `worker.registerFunction(...)`, etc. Don't introduce a wrapper layer or rebind to a different name partway through an example.
 
 ## Auto-generation expectations
 
