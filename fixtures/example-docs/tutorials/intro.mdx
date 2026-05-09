@@ -1,0 +1,37 @@
+---
+title: "Build your first iii worker"
+description: "End-to-end build of a small worker that publishes one trigger and exposes one function."
+owner: "devrel"
+type: "tutorial"
+---
+
+You'll build a small worker that publishes one trigger and exposes one function. By the end of the page the worker is running locally and your terminal is reading from it.
+
+## Set up the project
+
+Create a fresh directory and initialise the worker scaffold.
+
+```bash
+iii worker new hello
+cd hello
+```
+
+## Add the function
+
+Open `src/lib.rs` and add the function the worker exposes.
+
+```rust
+fn main() {}
+```
+
+## Run it
+
+```bash
+iii worker start hello
+```
+
+The terminal prints the worker's first heartbeat.
+
+## Internals <!-- skill:exclude-section -->
+
+Implementation notes that don't belong in the rendered skill: the worker's lifecycle is driven by the `iii-engine-runtime` crate's main loop, which polls for triggers every 50ms by default. Tutorials shouldn't expose this.

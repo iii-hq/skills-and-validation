@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# verify.sh — run iii-skill-check against worker manifests matching a glob.
+# verify-workers.sh — run iii-skill-check against worker manifests matching a glob.
 #
-# Usage: verify.sh <workers-glob> <layers>
+# Usage: verify-workers.sh <workers-glob> <layers>
 # Env:   INSTALL_DIR  Path to the extracted skills-and-validation bundle
 #                     (defaults to $PWD/.skill-check). The binary is at
 #                     $INSTALL_DIR/bin/iii-skill-check; bundle-adjacent

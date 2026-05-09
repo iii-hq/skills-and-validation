@@ -61,20 +61,27 @@ fn dispatch_verify(
     vale_override: Option<PathBuf>,
 ) -> anyhow::Result<()> {
     let (config_path, config) = load_controlling_config(target)?;
-    let workers_root = config_path
+    let root = config_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("`.skill-check.yaml` has no parent dir"))?;
     match config.resolved_mode() {
         iii_skill_core::config::Mode::Worker => verify_worker(
             target,
-            workers_root,
+            root,
             &config,
             layers,
             rules_override,
             vale_override,
         ),
         iii_skill_core::config::Mode::Docs => {
-            verify_docs(workers_root, &config, layers, rules_override)
+            // Per-target invocation symmetric with worker mode: if the
+            // target is a single .md/.mdx file, verify just that doc;
+            // otherwise enumerate the docs root.
+            if target.is_file() {
+                verify_doc_file(target, root, &config, layers, rules_override)
+            } else {
+                verify_docs(root, &config, layers, rules_override)
+            }
         }
     }
 }
@@ -86,7 +93,13 @@ fn dispatch_verify_rendered(target: &Path) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("`.skill-check.yaml` has no parent dir"))?;
     match config.resolved_mode() {
         iii_skill_core::config::Mode::Worker => verify_rendered_worker(target),
-        iii_skill_core::config::Mode::Docs => verify_rendered_docs(root, &config),
+        iii_skill_core::config::Mode::Docs => {
+            if target.is_file() {
+                verify_rendered_doc_file(target)
+            } else {
+                verify_rendered_docs(root, &config)
+            }
+        }
     }
 }
 
@@ -275,6 +288,92 @@ fn verify_docs(
     }
 
     report(&all_violations, &ai_failures, layers, &root.display().to_string())
+}
+
+/// Verify a single doc file. Used when the action iterates `docs-glob`
+/// and invokes the binary per-file (mirror of how worker mode iterates
+/// `workers-glob`).
+fn verify_doc_file(
+    source: &Path,
+    docs_root: &Path,
+    config: &iii_skill_core::config::Config,
+    layers: &str,
+    rules_override: Option<PathBuf>,
+) -> anyhow::Result<()> {
+    let layer_set: HashSet<&str> = layers.split(',').map(|s| s.trim()).collect();
+    let mut all_violations: Vec<iii_skill_core::structure::Violation> = Vec::new();
+    let mut ai_failures: Vec<(PathBuf, String)> = Vec::new();
+
+    if layer_set.contains("structure") {
+        all_violations.extend(iii_skill_core::docs::structure::check_source(source));
+    }
+
+    let body = std::fs::read_to_string(source)
+        .with_context(|| format!("reading {}", source.display()))?;
+    let frontmatter = iii_skill_core::docs::frontmatter::parse(&body).ok();
+    let skill_path = {
+        let mut s = source.as_os_str().to_owned();
+        s.push(".skill.md");
+        PathBuf::from(s)
+    };
+
+    if let Some(parsed) = frontmatter.as_ref() {
+        let doc_type = parsed.frontmatter.doc_type;
+
+        if layer_set.contains("vale") && skill_path.is_file() {
+            let styles_path = resolve_styles_path()?;
+            let cfg = iii_skill_core::docs::vale_config::build(
+                &[(skill_path.as_path(), doc_type)],
+                &styles_path,
+            );
+            let tmp = tempfile::TempDir::new().context("creating temp dir for vale config")?;
+            let cfg_path = tmp.path().join(".vale.ini");
+            std::fs::write(&cfg_path, cfg).context("writing runtime vale config")?;
+            all_violations
+                .extend(iii_skill_core::vale::run(&[skill_path.as_path()], &cfg_path)?);
+        }
+
+        if layer_set.contains("ai") && skill_path.is_file() {
+            let rules_dir = resolve_rules_dir(docs_root, config, rules_override.as_deref())?;
+            let rules = load_project_rules(&rules_dir)?;
+            let prompt_path = rules_dir.join("_skill-check-prompt.md");
+            let system_prompt = std::fs::read_to_string(&prompt_path)
+                .with_context(|| format!("reading {}", prompt_path.display()))?;
+            match iii_skill_core::ai::check_artifact_with_type(
+                &skill_path,
+                &rules,
+                &system_prompt,
+                doc_type,
+                &config.ai_check.model,
+                &config.ai_check.api_key_env_var,
+                config.ai_check.max_tokens,
+            )? {
+                Ok(()) => {}
+                Err(body) => ai_failures.push((skill_path.clone(), body)),
+            }
+        }
+    }
+
+    report(&all_violations, &ai_failures, layers, &source.display().to_string())
+}
+
+fn verify_rendered_doc_file(source: &Path) -> anyhow::Result<()> {
+    let mut s = source.as_os_str().to_owned();
+    s.push(".skill.md");
+    let skill_path = PathBuf::from(s);
+
+    let rendered = iii_skill_core::docs::render::render_doc(source)?;
+    let on_disk = std::fs::read_to_string(&skill_path).unwrap_or_default();
+    if on_disk != rendered.body {
+        eprintln!(
+            "{}.skill.md is out of date — re-run `iii-skill-render {}`",
+            source.display(),
+            source.display()
+        );
+        anyhow::bail!("rendered skill artifact is out of date");
+    }
+    println!("rendered skill artifact matches {}", source.display());
+    Ok(())
 }
 
 fn verify_rendered_docs(

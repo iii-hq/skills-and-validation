@@ -1,6 +1,9 @@
 # skills-and-validation
 
-Render and validate worker skill artifacts (`README.md`, `skill.md`, `skills/*.md`) against project-wide voice, structure, and Diataxis rules.
+Render and validate skill artifacts against project-wide voice, structure, and Diataxis rules. Two modes:
+
+- **Worker mode** — partials under `<worker>/docs/` render into `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`. The original surface; v1 schemas land here implicitly.
+- **Docs mode** — Mintlify-shaped `.md` / `.mdx` sources each render into a sibling `<source>.skill.md`. Heading-level inclusion + per-doc opt-in/out via HTML-comment markers; per-type Vale rules driven by frontmatter `type:`. Opt in by setting `version: 2` and `mode: docs` in `.skill-check.yaml`.
 
 Ships two binaries and a composite GitHub Action. Consumers pin a `version` in `.skill-check.yaml`; the action and the pre-commit hook download a matching release tarball.
 
@@ -128,21 +131,91 @@ action.yml               — composite action consumed via `uses: iii-hq/skills-
 
 ## Configuration: `.skill-check.yaml`
 
-Each consumer repo ships one `.skill-check.yaml` at the parent of its worker directories — typically the repo root when workers are top-level (`<repo>/<worker>/iii.worker.yaml`). The validator binary, the composite action, and the pre-commit hook all read it as the single source of truth for which release of `skills-and-validation` to use and how the AI layer authenticates.
+Each consumer repo ships one `.skill-check.yaml` at the root that contains the targets it validates. For worker mode that's the parent of the worker directories; for docs mode it's the docs root. The validator binary, the composite action, and the pre-commit hook all read it as the single source of truth for which release of `skills-and-validation` to use, which mode applies, and how the AI layer authenticates.
 
 See `templates/.skill-check.yaml` for an example file.
 
 | Field                      | Required | Purpose                                                                                                                                                 |
 | -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`                  | yes      | Schema version of `.skill-check.yaml` itself (integer). Bumped when the file format changes; current is `1`. Unrelated to the `skills-and-validation` release pin (that lives in your workflow's `uses:` ref or the action's `version:` input). |
+| `version`                  | yes      | Schema version of `.skill-check.yaml` itself (integer). `1` = implicit worker mode. `2` = the `mode` field below is required.                          |
+| `mode`                     | v2 only  | `worker` or `docs`. v1 schemas don't carry this field and resolve to `worker`.                                                                          |
 | `ai_check.provider`        | yes      | LLM provider for the AI layer. Currently only `anthropic` is supported.                                                                                 |
 | `ai_check.model`           | yes      | Anthropic model id (e.g. `claude-opus-4-7`).                                                                                                            |
-| `ai_check.api_key_env_var` | yes      | Name of the env var carrying the API key. The validator, the composite action, `scripts/verify.sh`, and `scripts/test-e2e.sh` all read this same field. |
+| `ai_check.api_key_env_var` | yes      | Name of the env var carrying the API key. The validator, the composite action, `scripts/verify-workers.sh` / `scripts/verify-docs.sh`, and `scripts/test-e2e.sh` all read this same field. |
 | `ai_check.max_tokens`      | yes      | Output token budget per AI call.                                                                                                                        |
+| `docs.include`             | docs     | List of glob patterns for sources to include (relative to the docs root). Required when `mode: docs`.                                                   |
+| `docs.exclude`             | no       | List of glob patterns evaluated after `docs.include` to drop matches.                                                                                   |
 | `rules.path`               | no       | Local override for `project-rules/`. Omit to use the rules bundled with the released validator.                                                         |
 | `styles.path`              | no       | Local override for the Vale `styles/` dir. Omit to use the bundled styles.                                                                              |
 
 Pin the release in your workflow file via `uses: iii-hq/skills-and-validation@v0.1` (floats to the latest 0.1.x patch) or `@v0.1.5` (exact). Bump `version` only when the schema itself changes — most consumers leave it alone.
+
+### Modes
+
+Worker and docs are the same architecture pointed at different content. Both:
+
+- Are configured by `.skill-check.yaml` at the relevant root.
+- Are iterated by globs at the action level (`workers-glob` / `docs-glob`).
+- Run the same render → verify → optional auto-commit pipeline.
+- Use the same structure / Vale / AI layers (the rule sets adjust per mode + per Diataxis type).
+
+What differs is the unit and the rendered artifacts:
+
+| | Worker mode | Docs mode |
+| --- | --- | --- |
+| Unit | A worker dir (one `iii.worker.yaml`) | One `.md` / `.mdx` doc |
+| Sources | `<worker>/docs/*.md`, `iii.worker.yaml`, `config.yaml` | The doc itself, plus its YAML frontmatter |
+| Rendered artifacts | `<worker>/README.md`, `<worker>/skill.md`, `<worker>/skills/*.md` | `<source>.skill.md` sibling next to each doc |
+| Action input scope | `workers-glob` (default `*/iii.worker.yaml`) | `docs-glob` (default `**/*.md **/*.mdx`) |
+| `.skill-check.yaml` schema | v1 (no `mode`) or v2 with `mode: worker` | v2 with `mode: docs` + `docs.include`/`docs.exclude` |
+
+#### Docs mode specifics
+
+Each in-scope doc starts with YAML frontmatter:
+
+```mdx
+---
+title: "Build a real-time todo app"
+description: "Step-by-step build of a real-time todo using iii streams."
+owner: "devrel"
+type: "tutorial"
+---
+```
+
+`type` selects the Diataxis ruleset (`tutorial`, `how-to`, `reference`, `explanation`) and is fed into the AI layer's per-artifact prompt. Required: `title`, `description`, `type`. Optional: `owner`.
+
+`.skill-check.yaml` shape:
+
+```yaml
+version: 2
+mode: docs
+docs:
+  include:
+    - "**/*.md"
+    - "**/*.mdx"
+  exclude:
+    - "**/CHANGELOG.md"
+ai_check:
+  provider: anthropic
+  model: claude-opus-4-7
+  api_key_env_var: ANTHROPIC_API_KEY
+  max_tokens: 6000
+```
+
+Markers (`<!-- skill:... -->` HTML comments) override the globs at the doc level or filter sections at the heading level:
+
+| Marker                                        | Scope     | Effect                                                                                                            |
+| --------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `<!-- skill:include-doc -->`                  | doc       | Forces this doc into the skill set (overrides `docs.exclude`).                                                    |
+| `<!-- skill:exclude-doc -->`                  | doc       | Drops this doc from the skill set (overrides `docs.include`).                                                     |
+| `<!-- skill:include-sections-by-default -->`  | file      | Default if absent. Every section is in the skill unless excluded.                                                 |
+| `<!-- skill:exclude-sections-by-default -->`  | file      | No section is in the skill unless explicitly included.                                                            |
+| `<!-- skill:include-section -->`              | heading   | Keeps this heading's section regardless of the file-level default.                                                |
+| `<!-- skill:exclude-section -->`              | heading   | Drops this heading's section regardless of the file-level default.                                                |
+
+Section markers can sit on the heading line (`## Internals <!-- skill:exclude-section -->`) or on their own line within the section. The renderer drops every recognised marker line from the rendered output; heading text stays.
+
+The full authoring guide lives in `content/skills/iii-doc-authoring/`. Browse via `skillkit read iii-doc-authoring/<topic>` after installing the bundle.
 
 ---
 
@@ -191,11 +264,14 @@ Annotations and step summary are processed by the runner itself — no token, no
 | Input               | Default                  | Description                                                                                                                        |
 | ------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix                                                                                   |
-| `workers-glob`      | `*/iii.worker.yaml`      | Glob of worker manifests to verify                                                                                                 |
+| `workers-glob`      | `*/iii.worker.yaml`      | Worker mode: glob of worker manifests to verify. Ignored in docs mode.                                                             |
+| `docs-glob`         | `**/*.md **/*.mdx`       | Docs mode: glob(s) of doc files to verify (space-separated). Ignored in worker mode.                                               |
 | `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                                                                                            |
 | `vale-version`      | `3.14.1`                 | Pinned Vale version                                                                                                                |
 | `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                            |
-| `write`             | `false`                  | Auto-render workers and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`. |
+| `write`             | `false`                  | Auto-render and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`.         |
+
+The action auto-detects the mode by reading `.skill-check.yaml`. Worker-mode consumers leave `docs-glob` at its default (and it's ignored); docs-mode consumers leave `workers-glob` at its default (also ignored).
 
 ### Render-then-verify ordering
 

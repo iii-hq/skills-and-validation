@@ -1,5 +1,5 @@
 name: skills-and-validation
-description: Validate worker README/skill artifacts via iii-skill-check
+description: Validate worker or docs skill artifacts via iii-skill-check
 author: iii-hq
 
 inputs:
@@ -12,8 +12,18 @@ inputs:
     required: false
     default: "latest"
   workers-glob:
-    description: Glob of worker manifests to verify (relative to GITHUB_WORKSPACE)
+    description: |
+      Worker mode: glob of worker manifests to verify, relative to
+      $GITHUB_WORKSPACE. Ignored when `.skill-check.yaml` declares
+      `mode: docs`.
     default: "*/iii.worker.yaml"
+  docs-glob:
+    description: |
+      Docs mode: glob(s) of doc files to verify, relative to
+      $GITHUB_WORKSPACE. Space-separated multiple patterns are
+      supported. Ignored when `.skill-check.yaml` declares
+      `mode: worker`.
+    default: "**/*.md **/*.mdx"
   layers:
     description: Comma-separated subset of layers to run (structure,vale,ai)
     default: "structure,vale,ai"
@@ -25,10 +35,10 @@ inputs:
     required: false
   write:
     description: |
-      Auto-render workers and commit the rendered diff back to the PR
-      branch when the source partials drift from their rendered output.
-      Requires the consumer's workflow to grant `contents: write`.
-      Defaults to false (read-only validation).
+      Auto-render and commit the rendered diff back to the PR branch when
+      sources drift from rendered output. Worker mode commits per-worker
+      README.md / skill.md / skills/; docs mode commits `<source>.skill.md`
+      siblings only. Requires `contents: write`.
     default: "false"
 
 runs:
@@ -38,9 +48,6 @@ runs:
       id: ver
       shell: bash
       run: |
-        # Release pin lives in the workflow's `uses:` ref (e.g. @v0.1) or in
-        # the action's `version` input. The schema-version field inside
-        # .skill-check.yaml is unrelated and not consulted here.
         v="${{ inputs.version }}"
         [ -z "$v" ] && v="latest"
         echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -54,20 +61,41 @@ runs:
           "${{ steps.ver.outputs.version }}" \
           "${{ runner.temp }}/skill-check"
 
-    # Render every matching worker into the CI workspace so the verify step
-    # below always operates on fresh artifacts. Without this, an out-of-sync
-    # README/skill could mask voice or structure violations that exist in
-    # docs/ but haven't been re-rendered yet. No commit happens here — the
-    # commit-and-push step (write mode only) runs *after* verify passes,
-    # which guarantees the bot never pushes content the action hasn't
-    # validated.
+    # Resolve mode from .skill-check.yaml. Look first at the workspace
+    # root; the binary itself walks up from each target so consumers
+    # whose config sits deeper still work, but the action needs the
+    # mode value here to pick which step body to run.
+    - name: Resolve mode
+      id: mode
+      shell: bash
+      run: |
+        config=".skill-check.yaml"
+        if [ ! -f "$config" ]; then
+          # Fall back to the first .skill-check.yaml the workspace contains —
+          # supports docs roots nested under e.g. docs/.
+          config=$(find . -maxdepth 4 -name '.skill-check.yaml' -print -quit 2>/dev/null || true)
+        fi
+        if [ -z "$config" ] || [ ! -f "$config" ]; then
+          echo "::error::no .skill-check.yaml found in the workspace"
+          exit 1
+        fi
+        mode=$(awk '/^mode:[[:space:]]*/ {sub(/^mode:[[:space:]]*/, ""); gsub(/[[:space:]]+|"/, ""); print; exit}' "$config")
+        [ -z "$mode" ] && mode="worker"
+        echo "mode=$mode" >> "$GITHUB_OUTPUT"
+        echo "config=$config" >> "$GITHUB_OUTPUT"
+        echo "resolved mode: $mode (from $config)"
+
+    # Render every in-scope source into the working tree so verify
+    # always operates on fresh artifacts. Mode determines what to
+    # iterate: worker mode walks `workers-glob` and renders per worker
+    # dir; docs mode walks `docs-glob` and renders per doc file. The
+    # binary's per-target invocation is the same in both modes.
     #
-    # Failures (e.g. missing docs/intro.md) are translated into a
-    # violations-format line and written to a preflight log so the verify
-    # step can prepend them to its own log — that way the sticky PR comment
-    # and inline annotations cover render failures as well as verify
-    # violations.
-    - name: Render workers in working tree
+    # Render failures are translated into a violations-format line and
+    # written to a preflight log so verify can prepend them to its log;
+    # the sticky PR comment + inline annotations cover render failures
+    # alongside verify violations.
+    - name: Render in working tree
       id: render
       shell: bash
       env:
@@ -79,46 +107,69 @@ runs:
         shopt -s nullglob globstar 2>/dev/null || shopt -s nullglob
 
         fail=0
-        for manifest in ${{ inputs.workers-glob }}; do
-          dir="$(dirname "$manifest")"
-          [ -d "$dir/docs" ] || continue
 
-          # Capture stdout+stderr so we can echo it for visibility AND parse
-          # it to synthesise a violations-format line on failure.
-          if out=$("$bin" "$dir" --write 2>&1); then
-            printf '%s\n' "$out"
+        emit_violation() {
+          local out="$1" label="$2"
+          local missing
+          missing=$(printf '%s\n' "$out" | sed -nE 's/^Error: reading +(.+)$/\1/p' | head -1)
+          if [ -n "$missing" ]; then
+            printf '%s:1 — required source file is missing or unreadable; cannot render %s\n' \
+              "$missing" "$label" >> "$preflight_log"
           else
-            rc=$?
-            printf '%s\n' "$out"
-            fail=1
-            # iii-skill-render's anyhow chain looks like:
-            #   Error: reading <path>
-            #   Caused by:
-            #       No such file or directory (os error 2)
-            # Pull the path from the first line and emit one violation line
-            # against it. Falls back to the worker dir if no path is in the
-            # error message (e.g. a future failure mode we haven't covered).
-            missing=$(printf '%s\n' "$out" | sed -nE 's/^Error: reading +(.+)$/\1/p' | head -1)
-            if [ -n "$missing" ]; then
-              printf '%s:1 — required source file is missing or unreadable; cannot render %s\n' \
-                "$missing" "$dir" >> "$preflight_log"
-            else
-              first_line=$(printf '%s\n' "$out" | head -1 | sed -E 's/^Error: *//')
-              printf '%s:1 — render failed: %s\n' "$dir" "${first_line:-unknown error}" >> "$preflight_log"
-            fi
+            local first_line
+            first_line=$(printf '%s\n' "$out" | head -1 | sed -E 's/^Error: *//')
+            printf '%s:1 — render failed: %s\n' "$label" "${first_line:-unknown error}" >> "$preflight_log"
           fi
-        done
+        }
 
-        # Scope drift detection to the rendered artifacts so unrelated
-        # untracked files in the consumer's workspace don't trigger an
-        # auto-commit. (The install dir lives in $RUNNER_TEMP now, but
-        # this also guards against future accidental in-workspace state.)
+        if [ "${{ steps.mode.outputs.mode }}" = "docs" ]; then
+          for doc in ${{ inputs.docs-glob }}; do
+            case "$doc" in
+              *.skill.md) continue ;;
+            esac
+            [ -f "$doc" ] || continue
+            if out=$("$bin" "$doc" --write 2>&1); then
+              printf '%s\n' "$out"
+            else
+              printf '%s\n' "$out"
+              fail=1
+              emit_violation "$out" "$doc"
+            fi
+          done
+        else
+          for manifest in ${{ inputs.workers-glob }}; do
+            dir="$(dirname "$manifest")"
+            [ -d "$dir/docs" ] || continue
+            if out=$("$bin" "$dir" --write 2>&1); then
+              printf '%s\n' "$out"
+            else
+              printf '%s\n' "$out"
+              fail=1
+              emit_violation "$out" "$dir"
+            fi
+          done
+        fi
+
+        # Drift detection scoped to rendered artifact paths so unrelated
+        # untracked workspace files don't trigger an auto-commit. Mode
+        # decides the path set: per-worker README/skill/skills/ vs
+        # *.skill.md siblings.
         drift_paths=""
-        for manifest in ${{ inputs.workers-glob }}; do
-          dir="$(dirname "$manifest")"
-          [ -d "$dir/docs" ] || continue
-          drift_paths+=" $dir/README.md $dir/skill.md $dir/skills"
-        done
+        if [ "${{ steps.mode.outputs.mode }}" = "docs" ]; then
+          for doc in ${{ inputs.docs-glob }}; do
+            case "$doc" in
+              *.skill.md) continue ;;
+            esac
+            [ -f "$doc" ] || continue
+            drift_paths+=" ${doc}.skill.md"
+          done
+        else
+          for manifest in ${{ inputs.workers-glob }}; do
+            dir="$(dirname "$manifest")"
+            [ -d "$dir/docs" ] || continue
+            drift_paths+=" $dir/README.md $dir/skill.md $dir/skills"
+          done
+        fi
         if [ -n "$drift_paths" ] \
            && [ -n "$(git status --porcelain -- $drift_paths 2>/dev/null)" ]; then
           echo "drift=present" >> "$GITHUB_OUTPUT"
@@ -129,9 +180,6 @@ runs:
 
         echo "preflight-log=$preflight_log" >> "$GITHUB_OUTPUT"
         echo "render-fail=$fail" >> "$GITHUB_OUTPUT"
-        # Don't propagate render failures here — let verify run so the
-        # sticky PR comment surfaces every issue at once. The verify step
-        # below folds render-fail into its own exit code.
         exit 0
 
     - name: Install Vale
@@ -149,7 +197,7 @@ runs:
           | sudo tar -xz -C /usr/local/bin vale
         vale --version
 
-    - name: Verify workers
+    - name: Verify
       id: verify
       shell: bash
       env:
@@ -162,49 +210,32 @@ runs:
         body="${RUNNER_TEMP:-/tmp}/skv-summary.md"
         rc=0
 
-        # Seed the log with any render-step failures (missing docs/*.md,
-        # etc.) so the sticky PR comment + inline annotations surface them
-        # alongside verify violations.
         cp "${{ steps.render.outputs.preflight-log }}" "$log"
 
-        "${{ github.action_path }}/scripts/verify.sh" \
-          "${{ inputs.workers-glob }}" \
+        if [ "${{ steps.mode.outputs.mode }}" = "docs" ]; then
+          script="verify-docs.sh"
+          glob="${{ inputs.docs-glob }}"
+        else
+          script="verify-workers.sh"
+          glob="${{ inputs.workers-glob }}"
+        fi
+        "${{ github.action_path }}/scripts/$script" \
+          "$glob" \
           "${{ inputs.layers }}" 2>&1 | tee -a "$log" || rc=$?
 
-        # Inline annotations on the PR's "Files changed" tab. Free; no
-        # consumer permission required.
         "${{ github.action_path }}/scripts/annotate.sh" "$log" || true
-
-        # Render the markdown report once; reuse it for both the run-summary
-        # surface and the optional sticky PR-comment so both say the same
-        # thing (same closer line, same per-layer table).
         "${{ github.action_path }}/scripts/summary.sh" "$log" > "$body"
         cat "$body" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
-        # Hand both paths to the optional PR-comment step.
         echo "log=$log" >> "$GITHUB_OUTPUT"
         echo "summary=$body" >> "$GITHUB_OUTPUT"
 
-        # Fold render failures into our exit code so the workflow fails
-        # whenever EITHER step found something — the report already covers
-        # both kinds of finding.
         if [ "${{ steps.render.outputs.render-fail }}" = "1" ]; then
           rc=${rc:-0}
           [ "$rc" -eq 0 ] && rc=1
         fi
         exit $rc
 
-    # Auto-fix push (write: true). Only runs on PRs, only when verify
-    # passed, only when the in-tree render produced drift. The default
-    # `if:` (`success()`) takes care of the verify-passed gate so the bot
-    # never pushes content the action hasn't validated; that's the whole
-    # point of moving this step *after* verify.
-    #
-    # The add-set is scoped to per-worker `README.md`, `skill.md`, and
-    # `skills/` so anything else in the workspace (consumer's tooling
-    # output, action install dir, ad-hoc temp files) can't slip into the
-    # bot's commit. A previous `git add -A` shipped 4.6 MB of bundled
-    # binaries into a consumer PR.
     - name: Commit and push rendered diff (write mode)
       if: ${{ inputs.write == 'true' && github.event_name == 'pull_request' && steps.render.outputs.drift == 'present' }}
       shell: bash
@@ -215,46 +246,39 @@ runs:
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
         shopt -s nullglob globstar 2>/dev/null || shopt -s nullglob
-        for manifest in ${{ inputs.workers-glob }}; do
-          dir="$(dirname "$manifest")"
-          [ -d "$dir/docs" ] || continue
-          # `2>/dev/null || true`: workers that didn't render still have
-          # their old (or missing) README.md/skill.md — `git add` on a
-          # nonexistent path errors, but we want to keep going.
-          git add "$dir/README.md" "$dir/skill.md" 2>/dev/null || true
-          # `git add -A <dir>/skills/` captures both new leaves and stale
-          # ones the renderer cleaned up.
-          git add -A "$dir/skills/" 2>/dev/null || true
-        done
+        if [ "${{ steps.mode.outputs.mode }}" = "docs" ]; then
+          for doc in ${{ inputs.docs-glob }}; do
+            case "$doc" in
+              *.skill.md) continue ;;
+            esac
+            [ -f "$doc" ] || continue
+            git add "${doc}.skill.md" 2>/dev/null || true
+          done
+        else
+          for manifest in ${{ inputs.workers-glob }}; do
+            dir="$(dirname "$manifest")"
+            [ -d "$dir/docs" ] || continue
+            git add "$dir/README.md" "$dir/skill.md" 2>/dev/null || true
+            git add -A "$dir/skills/" 2>/dev/null || true
+          done
+        fi
 
         if git diff --cached --quiet; then
-          echo "no rendered worker artifacts to commit (drift was outside the scoped add-set)"
+          echo "no rendered artifacts to commit (drift was outside the scoped add-set)"
           exit 0
         fi
 
-        git commit -m "chore: auto-render worker docs"
-        # GITHUB_HEAD_REF is the PR branch on the head repo. Push needs
-        # contents: write, which the consumer's workflow grants explicitly
-        # when opting into write mode.
+        git commit -m "chore: auto-render skill artifacts"
         git push origin "HEAD:${GITHUB_HEAD_REF}"
         echo "committed rendered drift to ${GITHUB_HEAD_REF}"
 
-    # Read-only mode: the in-tree render produced drift but the consumer
-    # didn't opt into write mode, so we can't fix it for them. Surface the
-    # drift as a workflow failure so they re-render locally and push.
-    # Runs on `always()` so it still fires when verify itself failed —
-    # consumers see both signals at once.
     - name: Fail on drift (read-only mode)
       if: ${{ always() && inputs.write != 'true' && steps.render.outputs.drift == 'present' }}
       shell: bash
       run: |
-        echo "::error::rendered artifacts are out of date — run \`iii-skill-render <worker> --write\` locally and commit the result, or set \`write: true\` on the action to let CI commit it for you."
+        echo "::error::rendered artifacts are out of date — re-render locally (\`iii-skill-render <target> --write\`) and commit, or set \`write: true\` on the action to let CI commit it for you."
         exit 1
 
-    # Sticky PR comment with the same markdown report. Requires the
-    # consumer to grant `pull-requests: write` in their workflow's
-    # `permissions:` block; without it, this step no-ops via
-    # continue-on-error so it never causes a red CI run on its own.
     - name: Post sticky PR comment (opt-in via pull-requests:write)
       if: ${{ always() && github.event_name == 'pull_request' && steps.verify.outputs.summary != '' }}
       continue-on-error: true
