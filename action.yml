@@ -67,11 +67,45 @@ runs:
         vale --version
 
     - name: Verify workers
+      id: verify
       shell: bash
       env:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         INSTALL_DIR: ${{ github.workspace }}/.skill-check
       run: |
+        set -o pipefail
+        log="${RUNNER_TEMP:-/tmp}/skv-verify.log"
+        rc=0
         "${{ github.action_path }}/scripts/verify.sh" \
           "${{ inputs.workers-glob }}" \
-          "${{ inputs.layers }}"
+          "${{ inputs.layers }}" 2>&1 | tee "$log" || rc=$?
+
+        # Inline annotations on the PR's "Files changed" tab. Free; no
+        # consumer permission required.
+        "${{ github.action_path }}/scripts/annotate.sh" "$log" || true
+
+        # Markdown report on the workflow run page (Checks tab).
+        "${{ github.action_path }}/scripts/summary.sh" "$log" \
+          >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+        # Hand the log path to the optional PR-comment step.
+        echo "log=$log" >> "$GITHUB_OUTPUT"
+        exit $rc
+
+    # Sticky PR comment with the same markdown report. Requires the
+    # consumer to grant `pull-requests: write` in their workflow's
+    # `permissions:` block; without it, this step no-ops via
+    # continue-on-error so it never causes a red CI run on its own.
+    - name: Post sticky PR comment (opt-in via pull-requests:write)
+      if: ${{ always() && github.event_name == 'pull_request' }}
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        body="$(mktemp)"
+        "${{ github.action_path }}/scripts/summary.sh" \
+          "${{ steps.verify.outputs.log }}" > "$body"
+        "${{ github.action_path }}/scripts/pr-comment.sh" \
+          "${{ github.event.pull_request.number }}" \
+          "$body"

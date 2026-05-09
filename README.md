@@ -242,6 +242,10 @@ rm -rf /tmp/skill-check-install
 # 4. test the action from a sister repo (or from workers once cut over)
 #    add this to .github/workflows/skill-check.yml in the consumer repo:
 #
+#    permissions:
+#      contents: read
+#      pull-requests: write       # opt-in: enables the sticky PR comment;
+#                                 # omit if you only want inline annotations
 #    jobs:
 #      verify:
 #        runs-on: ubuntu-latest
@@ -251,6 +255,18 @@ rm -rf /tmp/skill-check-install
 #            with:
 #              anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
+
+### What the consumer's PR shows
+
+Three layers of feedback, all from a single `uses:` line:
+
+| Surface                          | Permission needed     | What appears                                            |
+| -------------------------------- | --------------------- | ------------------------------------------------------- |
+| Inline annotations (Files diff)  | none (always-on)      | red squiggle on each `path:line` the validator flagged  |
+| Run summary (Checks tab)         | none (always-on)      | markdown table of every violation + `N verified, M skipped` |
+| Sticky PR comment                | `pull-requests: write`| same markdown table as a PR comment that updates in place |
+
+Annotations and step summary are processed by the runner itself — no token, no API call, no opt-in. The PR-comment step uses the consumer's default `GITHUB_TOKEN` and runs only on `pull_request` events; without `pull-requests: write` it no-ops via `continue-on-error: true` rather than failing the run.
 
 ---
 
