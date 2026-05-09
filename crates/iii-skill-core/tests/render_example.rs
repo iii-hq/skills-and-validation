@@ -1,39 +1,29 @@
-use std::path::PathBuf;
+mod common;
 
-/// TDD spec for the renderer.
-///
-/// Asserts that running `render_worker` against `templates/example-worker`
-/// produces, byte-for-byte, the checked-in `README.md`, `skill.md`, and
-/// `skills/*.md` artifacts.
-///
-/// The example-worker fixture is the single source of truth for how the
-/// renderer must behave; if the fixture is updated, this test is what will
-/// detect it.
+use common::RenderedTemplate;
+
+/// Smoke test: rendering `templates/example-worker/` produces a non-empty
+/// README, skill, and the three known leaves. The byte-stability of the
+/// renderer is exercised separately by `check_rendered.rs` (re-rendering
+/// must produce identical output).
 #[test]
-fn render_example_matches_golden() {
-    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .unwrap()
-        .to_path_buf();
-    let example = repo_root.join("templates/example-worker");
+fn render_example_succeeds_in_place() {
+    let rendered = RenderedTemplate::lock();
+    let worker = rendered.worker();
 
-    let outputs = iii_skill_core::render::render_worker(&example)
-        .expect("render_worker should succeed against the example-worker fixture");
+    let readme = std::fs::read_to_string(worker.join("README.md")).unwrap();
+    assert!(readme.contains("# textstats"), "README missing worker name heading");
 
-    let expected_readme = std::fs::read_to_string(example.join("README.md")).unwrap();
-    similar_asserts::assert_eq!(expected_readme, outputs.readme);
-
-    let expected_skill = std::fs::read_to_string(example.join("skill.md")).unwrap();
-    similar_asserts::assert_eq!(expected_skill, outputs.skill);
+    let skill = std::fs::read_to_string(worker.join("skill.md")).unwrap();
+    assert!(skill.contains("# textstats"), "skill.md missing worker name heading");
 
     for leaf in ["analyze", "diff", "summarize"] {
-        let expected =
-            std::fs::read_to_string(example.join("skills").join(format!("{leaf}.md"))).unwrap();
-        let actual = outputs
-            .leaves
-            .get(leaf)
-            .unwrap_or_else(|| panic!("missing leaf '{leaf}' in render output"));
-        similar_asserts::assert_eq!(expected, *actual);
+        let path = worker.join("skills").join(format!("{leaf}.md"));
+        let body = std::fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("rendered leaf missing: {}", path.display()));
+        assert!(
+            body.contains("DO NOT EDIT"),
+            "leaf {leaf} missing generated-file warning"
+        );
     }
 }

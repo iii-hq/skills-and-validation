@@ -1,13 +1,8 @@
+mod common;
+
+use common::{repo_root, RenderedTemplate};
 use std::path::PathBuf;
 use tempfile::TempDir;
-
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .unwrap()
-        .to_path_buf()
-}
 
 fn vale_config() -> PathBuf {
     repo_root().join("content/.vale.ini")
@@ -15,7 +10,8 @@ fn vale_config() -> PathBuf {
 
 #[test]
 fn vale_passes_example_artifacts() {
-    let example = repo_root().join("templates/example-worker");
+    let rendered = RenderedTemplate::lock();
+    let example = rendered.worker();
 
     let readme = example.join("README.md");
     let skill = example.join("skill.md");

@@ -1,12 +1,6 @@
-use std::path::PathBuf;
+mod common;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .unwrap()
-        .to_path_buf()
-}
+use common::{repo_root, RenderedTemplate};
 
 fn load_rules() -> String {
     let rules_dir = repo_root().join("content/project-rules");
@@ -113,7 +107,8 @@ fn ai_check_passes_example_readme_when_key_present() {
         return;
     }
 
-    let example_readme = repo_root().join("templates/example-worker").join("README.md");
+    let rendered = RenderedTemplate::lock();
+    let example_readme = rendered.worker().join("README.md");
     let result = iii_skill_core::ai::check_artifact(
         &example_readme,
         &load_rules(),

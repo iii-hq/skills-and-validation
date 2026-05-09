@@ -1,13 +1,8 @@
-use std::path::{Path, PathBuf};
-use tempfile::TempDir;
+mod common;
 
-fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(|p| p.parent())
-        .unwrap()
-        .to_path_buf()
-}
+use common::RenderedTemplate;
+use std::path::Path;
+use tempfile::TempDir;
 
 /// Build a minimal worker dir with a rendered README/skill, no leaves.
 /// Tests then mutate one specific surface to trigger one specific check.
@@ -43,9 +38,9 @@ fn write_minimal_worker(dir: &Path, name: &str) {
 
 #[test]
 fn example_worker_passes_structure_check() {
-    let example = repo_root().join("templates/example-worker");
-    let violations =
-        iii_skill_core::structure::check(&example).expect("structure check should not error");
+    let rendered = RenderedTemplate::lock();
+    let violations = iii_skill_core::structure::check(rendered.worker())
+        .expect("structure check should not error");
     assert!(
         violations.is_empty(),
         "expected zero violations against example-worker, got: {violations:?}"
