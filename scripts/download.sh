@@ -11,7 +11,7 @@
 # After a successful download, the tarball is extracted to <dest-dir>:
 #   <dest-dir>/bin/iii-skill-check
 #   <dest-dir>/bin/iii-skill-render
-#   <dest-dir>/content/{project-rules,styles,iii-skill-authoring,.vale.ini}
+#   <dest-dir>/content/{project-rules,styles,skills,.vale.ini}
 #   <dest-dir>/templates/.skill-check.yaml
 #   <dest-dir>/VERSION
 

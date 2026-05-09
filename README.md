@@ -1,7 +1,7 @@
 # skills-and-validation
 
 > [!TIP]
-> **Authoring worker docs?** The release bundle ships an `iii-skill-authoring` skill bundle at `.skill-check/content/iii-skill-authoring/` after `scripts/download.sh` (or after the action runs). Browse with `skillkit read iii-skill-authoring/<topic>` — topics include `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`. To surface the bundle through the iii engine, add `.skill-check/content/iii-skill-authoring/skills/**/*.md` to the engine `config.yaml`'s `skills:` glob.
+> **Authoring worker docs?** The release bundle ships an `iii-skill-authoring` install it with `npx skillkit add iii-hq/skills-and-validation/content/skills`. To surface it through the iii engine, add `.skill-check/content/skills/iii-skill-authoring/**/*.md` to the engine `config.yaml`'s `skills:` glob.
 
 Render and validate worker skill artifacts (`README.md`, `skill.md`, `skills/*.md`) against project-wide voice, structure, and Diataxis rules.
 
@@ -15,7 +15,7 @@ Ships two binaries and a composite GitHub Action. Consumers pin a `version` in `
 crates/iii-skill-core    — shared lib (render, structure, vale, ai, config, bundle)
 crates/iii-skill-render  — render-only binary (no network deps)
 crates/iii-skill-check   — verify + verify-rendered binary (Vale + AI)
-content/                 — project-rules, styles, iii-skill-authoring, .vale.ini
+content/                 — project-rules, styles, skills/, .vale.ini
 templates/               — .skill-check.yaml + example-worker the consumer copies
 fixtures/                — intentionally broken/targeted workers used by tests
 scripts/                 — shared between the composite action and pre-commit hook

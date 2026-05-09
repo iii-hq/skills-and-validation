@@ -4,15 +4,17 @@ The `## Quickstart` section is the meat of a worker README. It moves the reader 
 
 ## Constraints
 
-- Aim for thirty lines of code or fewer in the primary example.
-- Pick one audience-appropriate language (Rust, Node, or Python) — not a polyglot wall.
+- Aim for thirty lines of code or fewer per example block.
+- Show the call in each iii SDK language the worker is callable from — Rust, TypeScript, and Python. Equivalent payloads, equivalent output, one fenced block per language.
 - Show one to three functions, chosen for introductory value, not breadth. A worker with twenty functions still shows two.
 - Each shown call demonstrates three things:
   - The function id, e.g., `textstats::analyze`.
   - A realistic payload — the kind a caller would actually send, not `{}` or `{ "key": "value" }`.
   - The expected output shape, in a comment, a `println!`, or a follow-up paragraph.
 
-## Skeleton
+## Skeletons
+
+Show one block per language the worker is callable from. The Rust SDK is `iii_sdk` (Cargo crate), the TypeScript SDK is `iii-sdk` (npm), and the Python SDK is `iii` (PyPI `iii-sdk`).
 
 ```rust
 use iii_sdk::{register_worker, InitOptions, TriggerRequest};
@@ -34,6 +36,32 @@ async fn main() -> anyhow::Result<()> {
     println!("{result:#?}");
     Ok(())
 }
+```
+
+```typescript
+import { registerWorker } from 'iii-sdk'
+
+const iii = registerWorker('ws://localhost:49134')
+
+const result = await iii.trigger({
+  function_id: '<worker>::<verb>',
+  payload: { /* realistic input here */ },
+})
+
+console.log(result)
+```
+
+```python
+from iii import register_worker
+
+iii = register_worker("ws://localhost:49134")
+
+result = iii.trigger({
+    "function_id": "<worker>::<verb>",
+    "payload": { },  # realistic input here
+})
+
+print(result)
 ```
 
 ## Cross-worker handshakes
