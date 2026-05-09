@@ -31,6 +31,20 @@ fn main() -> Result<()> {
         for (leaf, body) in &out.leaves {
             std::fs::write(cli.worker.join("skills").join(format!("{leaf}.md")), body)?;
         }
+        // Cleanup: remove any skills/<name>.md whose source partial no
+        // longer exists. Without this, removing a docs/leaves/<name>.md
+        // leaves the rendered output behind and the next verify-rendered
+        // would (now) flag it as an orphan.
+        for disk_leaf in iii_skill_core::render::list_rendered_leaves(&cli.worker) {
+            if !out.leaves.contains_key(&disk_leaf) {
+                let path = cli
+                    .worker
+                    .join("skills")
+                    .join(format!("{disk_leaf}.md"));
+                std::fs::remove_file(&path)?;
+                println!("removed stale {}", path.display());
+            }
+        }
         println!("wrote artifacts to {}", cli.worker.display());
     }
     Ok(())

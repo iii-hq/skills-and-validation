@@ -162,27 +162,7 @@ fn resolve_vale_config(
 }
 
 fn run_verify_rendered(worker: &Path) -> anyhow::Result<()> {
-    let outputs = iii_skill_core::render::render_worker(worker)?;
-    let mut drift: Vec<String> = Vec::new();
-
-    let readme_disk =
-        std::fs::read_to_string(worker.join("README.md")).unwrap_or_default();
-    if readme_disk != outputs.readme {
-        drift.push("README.md is out of date".into());
-    }
-    let skill_disk =
-        std::fs::read_to_string(worker.join("skill.md")).unwrap_or_default();
-    if skill_disk != outputs.skill {
-        drift.push("skill.md is out of date".into());
-    }
-    for (leaf, body) in &outputs.leaves {
-        let path = worker.join("skills").join(format!("{leaf}.md"));
-        let disk = std::fs::read_to_string(&path).unwrap_or_default();
-        if &disk != body {
-            drift.push(format!("skills/{leaf}.md is out of date"));
-        }
-    }
-
+    let drift = iii_skill_core::render::check_rendered(worker)?;
     if !drift.is_empty() {
         for d in &drift {
             eprintln!("{d}");

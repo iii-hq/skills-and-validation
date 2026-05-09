@@ -125,6 +125,60 @@ fn read_optional_partial(path: &Path) -> anyhow::Result<Option<String>> {
     }
 }
 
+/// List the leaf names currently present on disk under `<dir>/skills/*.md`.
+/// Used for orphan detection and stale-leaf cleanup, both of which compare
+/// what's on disk against the set of leaves the renderer just produced.
+pub fn list_rendered_leaves(dir: &Path) -> Vec<String> {
+    let skills = dir.join("skills");
+    let mut names: Vec<String> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&skills) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("md") {
+                continue;
+            }
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                names.push(stem.to_string());
+            }
+        }
+    }
+    names.sort();
+    names
+}
+
+/// Re-render `dir` and report drift between source and on-disk artifacts.
+/// Returns one message per out-of-date or orphaned file; an empty Vec means
+/// the worker is in sync.
+pub fn check_rendered(dir: &Path) -> anyhow::Result<Vec<String>> {
+    let outputs = render_worker(dir)?;
+    let mut drift: Vec<String> = Vec::new();
+
+    let readme_disk = std::fs::read_to_string(dir.join("README.md")).unwrap_or_default();
+    if readme_disk != outputs.readme {
+        drift.push("README.md is out of date".into());
+    }
+    let skill_disk = std::fs::read_to_string(dir.join("skill.md")).unwrap_or_default();
+    if skill_disk != outputs.skill {
+        drift.push("skill.md is out of date".into());
+    }
+    for (leaf, body) in &outputs.leaves {
+        let path = dir.join("skills").join(format!("{leaf}.md"));
+        let disk = std::fs::read_to_string(&path).unwrap_or_default();
+        if &disk != body {
+            drift.push(format!("skills/{leaf}.md is out of date"));
+        }
+    }
+    for disk_leaf in list_rendered_leaves(dir) {
+        if !outputs.leaves.contains_key(&disk_leaf) {
+            drift.push(format!(
+                "skills/{disk_leaf}.md is orphaned (no docs/leaves/{disk_leaf}.md)"
+            ));
+        }
+    }
+    drift.sort();
+    Ok(drift)
+}
+
 fn list_leaves(dir: &Path) -> anyhow::Result<Vec<(String, PathBuf)>> {
     let leaves_dir = dir.join("docs").join("leaves");
     let mut leaves: Vec<(String, PathBuf)> = Vec::new();
