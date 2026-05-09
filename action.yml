@@ -54,17 +54,17 @@ runs:
           "${{ steps.ver.outputs.version }}" \
           "${{ github.workspace }}/.skill-check"
 
-    # Auto-fix opt-in: when `write: true`, re-render every matching worker
-    # and commit the rendered diff back to the PR branch. Verify still
-    # runs afterwards to catch voice/structure violations the renderer
-    # can't fix on its own.
-    - name: Auto-render and commit (write mode)
-      if: ${{ inputs.write == 'true' && github.event_name == 'pull_request' }}
+    # Render every matching worker into the CI workspace so the verify step
+    # below always operates on fresh artifacts. Without this, an out-of-sync
+    # README/skill could mask voice or structure violations that exist in
+    # docs/ but haven't been re-rendered yet. No commit happens here — the
+    # commit-and-push step (write mode only) runs *after* verify passes,
+    # which guarantees the bot never pushes content the action hasn't
+    # validated.
+    - name: Render workers in working tree
+      id: render
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
-        # The runner already pinned a specific release tarball; no need to
-        # nag about newer versions (or hit the GitHub API) inside the action.
         SKV_NO_UPDATE_CHECK: "1"
       run: |
         bin="${{ github.workspace }}/.skill-check/bin/iii-skill-render"
@@ -74,21 +74,12 @@ runs:
           [ -d "$dir/docs" ] || continue
           "$bin" "$dir" --write
         done
-
-        if [ -z "$(git status --porcelain)" ]; then
-          echo "no rendered drift; nothing to commit"
-          exit 0
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "drift=present" >> "$GITHUB_OUTPUT"
+          echo "rendered output drifted from sources; verify will run against the fresh artifacts."
+        else
+          echo "drift=none" >> "$GITHUB_OUTPUT"
         fi
-
-        git config user.name  "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add -A
-        git commit -m "chore: auto-render worker docs"
-        # GITHUB_HEAD_REF is the PR branch on the head repo. Push needs
-        # contents: write, which the consumer's workflow grants explicitly
-        # when opting into write mode.
-        git push origin "HEAD:${GITHUB_HEAD_REF}"
-        echo "committed rendered drift to ${GITHUB_HEAD_REF}"
 
     - name: Install Vale
       shell: bash
@@ -135,6 +126,39 @@ runs:
         echo "log=$log" >> "$GITHUB_OUTPUT"
         echo "summary=$body" >> "$GITHUB_OUTPUT"
         exit $rc
+
+    # Auto-fix push (write: true). Only runs on PRs, only when verify
+    # passed, only when the in-tree render produced drift. The default
+    # `if:` (`success()`) takes care of the verify-passed gate so the bot
+    # never pushes content the action hasn't validated; that's the whole
+    # point of moving this step *after* verify.
+    - name: Commit and push rendered diff (write mode)
+      if: ${{ inputs.write == 'true' && github.event_name == 'pull_request' && steps.render.outputs.drift == 'present' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        git config user.name  "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add -A
+        git commit -m "chore: auto-render worker docs"
+        # GITHUB_HEAD_REF is the PR branch on the head repo. Push needs
+        # contents: write, which the consumer's workflow grants explicitly
+        # when opting into write mode.
+        git push origin "HEAD:${GITHUB_HEAD_REF}"
+        echo "committed rendered drift to ${GITHUB_HEAD_REF}"
+
+    # Read-only mode: the in-tree render produced drift but the consumer
+    # didn't opt into write mode, so we can't fix it for them. Surface the
+    # drift as a workflow failure so they re-render locally and push.
+    # Runs on `always()` so it still fires when verify itself failed —
+    # consumers see both signals at once.
+    - name: Fail on drift (read-only mode)
+      if: ${{ always() && inputs.write != 'true' && steps.render.outputs.drift == 'present' }}
+      shell: bash
+      run: |
+        echo "::error::rendered artifacts are out of date — run \`iii-skill-render <worker> --write\` locally and commit the result, or set \`write: true\` on the action to let CI commit it for you."
+        exit 1
 
     # Sticky PR comment with the same markdown report. Requires the
     # consumer to grant `pull-requests: write` in their workflow's

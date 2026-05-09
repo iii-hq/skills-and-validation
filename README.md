@@ -197,9 +197,15 @@ Annotations and step summary are processed by the runner itself — no token, no
 | `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                            |
 | `write`             | `false`                  | Auto-render workers and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`. |
 
+### Render-then-verify ordering
+
+The action always re-renders worker docs in the CI workspace *before* running `verify`. Without this, an out-of-sync `README.md` could mask voice or structure violations that exist in `docs/` but haven't been propagated to the rendered artifacts yet — verify would happily pass on the stale README while real errors sat unflagged in `docs/intro.md`. Rendering first means verify always operates on artifacts that reflect the current `docs/` content.
+
+This is independent of `write:` — the in-tree render runs in both modes. What `write` controls is whether the rendered diff gets committed back to the PR branch.
+
 ### Auto-fix mode (opt-in)
 
-With `write: true` plus `contents: write`, the action runs `iii-skill-render --write` against every matching worker before verifying. If that produces changes (someone edited `docs/*.md` but forgot to re-render), the action commits them with author `github-actions[bot]` and pushes to the PR branch:
+With `write: true` plus `contents: write`, the action commits the rendered diff back to the PR branch — but only when `verify` passed first. The bot never pushes content the action hasn't validated, so a `chore: auto-render worker docs` commit on the branch is always known-good output.
 
 ```yaml
 permissions:
@@ -221,9 +227,9 @@ jobs:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-The follow-up commit doesn't trigger another workflow run (GitHub's default `GITHUB_TOKEN` doesn't fire downstream `push`/`pull_request` events). Voice / structure violations the renderer can't fix on its own still show up in the verify output.
+The follow-up commit doesn't trigger another workflow run (GitHub's default `GITHUB_TOKEN` doesn't fire downstream `push`/`pull_request` events) — that's fine because the action already validated the content before pushing.
 
-Forks: write mode only works on PRs opened from the same repository; the consumer's `GITHUB_TOKEN` can't push to a fork. Validation-only mode (`write: false`, the default) works for both.
+Forks: write mode only works on PRs opened from the same repository; the consumer's `GITHUB_TOKEN` can't push to a fork. Validation-only mode (`write: false`, the default) works for both. In read-only mode, drift between `docs/` and rendered artifacts is reported as a workflow failure so the consumer knows to re-render locally and push.
 
 ---
 
