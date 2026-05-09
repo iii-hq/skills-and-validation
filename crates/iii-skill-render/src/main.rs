@@ -56,15 +56,26 @@ fn main() -> Result<()> {
             render_worker_dir(&cli.target, cli.write)
         }
         iii_skill_core::config::Mode::Docs => {
-            if cli.target.is_file() {
-                return render_single_doc(&cli.target, cli.write);
-            }
-            // Docs root = the dir containing `.skill-check.yaml`. Even if the
-            // user passed a subdir, the enumerator filters by globs against
-            // the docs root, so we render from there.
             let docs_root = config_path
                 .parent()
                 .ok_or_else(|| anyhow::anyhow!("`.skill-check.yaml` has no parent dir"))?;
+            if cli.target.is_file() {
+                let docs_config = config.docs.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("docs mode but `.skill-check.yaml` has no `docs:` block")
+                })?;
+                if !iii_skill_core::docs::enumerate::is_in_scope(
+                    &cli.target,
+                    docs_root,
+                    docs_config,
+                )? {
+                    println!(
+                        "skipped {} (out of scope per `.skill-check.yaml`)",
+                        cli.target.display()
+                    );
+                    return Ok(());
+                }
+                return render_single_doc(&cli.target, cli.write);
+            }
             render_docs_root(docs_root, &config, cli.write)
         }
     }

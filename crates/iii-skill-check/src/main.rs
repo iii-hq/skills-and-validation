@@ -78,6 +78,16 @@ fn dispatch_verify(
             // target is a single .md/.mdx file, verify just that doc;
             // otherwise enumerate the docs root.
             if target.is_file() {
+                let docs_config = config.docs.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("docs mode but `.skill-check.yaml` has no `docs:` block")
+                })?;
+                if !iii_skill_core::docs::enumerate::is_in_scope(target, root, docs_config)? {
+                    println!(
+                        "skipped {} (out of scope per `.skill-check.yaml`)",
+                        target.display()
+                    );
+                    return Ok(());
+                }
                 verify_doc_file(target, root, &config, layers, rules_override)
             } else {
                 verify_docs(root, &config, layers, rules_override)
@@ -95,6 +105,16 @@ fn dispatch_verify_rendered(target: &Path) -> anyhow::Result<()> {
         iii_skill_core::config::Mode::Worker => verify_rendered_worker(target),
         iii_skill_core::config::Mode::Docs => {
             if target.is_file() {
+                let docs_config = config.docs.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("docs mode but `.skill-check.yaml` has no `docs:` block")
+                })?;
+                if !iii_skill_core::docs::enumerate::is_in_scope(target, root, docs_config)? {
+                    println!(
+                        "skipped {} (out of scope per `.skill-check.yaml`)",
+                        target.display()
+                    );
+                    return Ok(());
+                }
                 verify_rendered_doc_file(target)
             } else {
                 verify_rendered_docs(root, &config)

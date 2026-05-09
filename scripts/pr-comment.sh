@@ -1,32 +1,34 @@
 #!/usr/bin/env bash
 # pr-comment.sh — post or update a sticky PR comment with the verify report.
 #
-# Usage: pr-comment.sh <pr-number> <body-file>
+# Usage: pr-comment.sh <pr-number> <body-file> [config-path]
 # Env:   GH_TOKEN              — passed to gh; the action sets this from
 #                                 ${{ github.token }}.
 #        GITHUB_REPOSITORY     — provided automatically by the runner.
 #
 # A hidden HTML marker pins our previous comment so subsequent runs edit
-# it in place instead of stacking new comments. Skipped silently when
-# the token lacks pull-requests:write — the caller pairs this script
-# with `continue-on-error: true`.
+# it in place instead of stacking new comments. The marker is keyed by
+# `config-path` so consumers running the action multiple times in one
+# workflow (e.g. via matrix to validate worker + docs side-by-side) get
+# one sticky comment per config rather than the runs clobbering each
+# other. Skipped silently when the token lacks pull-requests:write — the
+# caller pairs this script with `continue-on-error: true`.
 
 set -euo pipefail
 
 PR="${1:?missing PR number}"
 BODY_FILE="${2:?missing body-file arg}"
-MARKER="<!-- skill-check-status-comment -->"
+CONFIG_PATH="${3:-.skill-check.yaml}"
+MARKER="<!-- skill-check-status-comment:${CONFIG_PATH} -->"
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "gh CLI not available; skipping PR comment" >&2
   exit 0
 fi
 
-# Compose the body with the marker pinned to the top.
 final=$(mktemp)
 { echo "$MARKER"; cat "$BODY_FILE"; } > "$final"
 
-# Look up an existing skill-check comment on this PR.
 existing=$(gh api \
   "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
   --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" \

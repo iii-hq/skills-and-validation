@@ -11,18 +11,29 @@ inputs:
       (`@v0.1.5`) when you want reproducibility.
     required: false
     default: "latest"
+  config-path:
+    description: |
+      Path to the `.skill-check.yaml` that controls this run, relative to
+      $GITHUB_WORKSPACE. Defaults to `.skill-check.yaml` at the workspace
+      root. Set this when validating multiple modes in one repo via a
+      matrix strategy — each matrix entry points at its own config and
+      the sticky PR comment is keyed off the path so runs don't clobber
+      each other.
+    default: ".skill-check.yaml"
   workers-glob:
     description: |
       Worker mode: glob of worker manifests to verify, relative to
-      $GITHUB_WORKSPACE. Ignored when `.skill-check.yaml` declares
-      `mode: docs`.
+      $GITHUB_WORKSPACE. Ignored when the controlling `.skill-check.yaml`
+      declares `mode: docs`.
     default: "*/iii.worker.yaml"
   docs-glob:
     description: |
       Docs mode: glob(s) of doc files to verify, relative to
-      $GITHUB_WORKSPACE. Space-separated multiple patterns are
-      supported. Ignored when `.skill-check.yaml` declares
-      `mode: worker`.
+      $GITHUB_WORKSPACE. Space-separated patterns are supported. Ignored
+      when the controlling `.skill-check.yaml` declares `mode: worker`.
+      The binary additionally filters per-file against
+      `docs.include` / `docs.exclude` from the config, so a permissive
+      glob can't make the renderer attempt non-doc files.
     default: "**/*.md **/*.mdx"
   layers:
     description: Comma-separated subset of layers to run (structure,vale,ai)
@@ -61,22 +72,18 @@ runs:
           "${{ steps.ver.outputs.version }}" \
           "${{ runner.temp }}/skill-check"
 
-    # Resolve mode from .skill-check.yaml. Look first at the workspace
-    # root; the binary itself walks up from each target so consumers
-    # whose config sits deeper still work, but the action needs the
-    # mode value here to pick which step body to run.
+    # Read mode from the config-path input. The binary itself also walks
+    # up from each target to find the controlling config; the action
+    # needs the mode here to decide which step body to run, so single
+    # source of truth wins on the binary side and the action just
+    # mirrors it.
     - name: Resolve mode
       id: mode
       shell: bash
       run: |
-        config=".skill-check.yaml"
+        config="${{ inputs.config-path }}"
         if [ ! -f "$config" ]; then
-          # Fall back to the first .skill-check.yaml the workspace contains —
-          # supports docs roots nested under e.g. docs/.
-          config=$(find . -maxdepth 4 -name '.skill-check.yaml' -print -quit 2>/dev/null || true)
-        fi
-        if [ -z "$config" ] || [ ! -f "$config" ]; then
-          echo "::error::no .skill-check.yaml found in the workspace"
+          echo "::error::config-path \`$config\` not found (relative to \$GITHUB_WORKSPACE)"
           exit 1
         fi
         mode=$(awk '/^mode:[[:space:]]*/ {sub(/^mode:[[:space:]]*/, ""); gsub(/[[:space:]]+|"/, ""); print; exit}' "$config")
@@ -288,4 +295,5 @@ runs:
       run: |
         "${{ github.action_path }}/scripts/pr-comment.sh" \
           "${{ github.event.pull_request.number }}" \
-          "${{ steps.verify.outputs.summary }}"
+          "${{ steps.verify.outputs.summary }}" \
+          "${{ inputs.config-path }}"

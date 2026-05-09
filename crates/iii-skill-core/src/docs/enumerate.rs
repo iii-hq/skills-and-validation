@@ -62,25 +62,8 @@ pub fn enumerate(root: &Path, config: &DocsConfig) -> anyhow::Result<Vec<Discove
             continue;
         }
 
-        let rel = path
-            .strip_prefix(root)
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_else(|_| path.to_string_lossy().to_string());
-
-        let glob_match = matches_any(&includes, &rel);
-        let excluded = matches_any(&excludes, &rel);
-
-        // Per-doc opt-in/out — read just enough of the file to find any
-        // top-of-file scope marker. Scanning the whole body would be
-        // wasteful here; markers conventionally sit in the first ~20 lines.
-        let scope = peek_doc_scope(path).unwrap_or(None);
-
-        let in_scope = match scope {
-            Some(DocScope::Include) => true,
-            Some(DocScope::Exclude) => false,
-            None => glob_match && !excluded,
-        };
-        if !in_scope {
+        let rel = relative_path(root, path);
+        if !decide(&rel, path, &includes, &excludes) {
             continue;
         }
 
@@ -91,6 +74,46 @@ pub fn enumerate(root: &Path, config: &DocsConfig) -> anyhow::Result<Vec<Discove
     }
     found.sort_by(|a, b| a.rel.cmp(&b.rel));
     Ok(found)
+}
+
+/// Decide whether a single source path should be in the skill set,
+/// applying the same rules as [`enumerate`]. Use this from per-file
+/// invocation paths (binary's `iii-skill-render <doc>` and
+/// `iii-skill-check verify <doc>`) so a permissive action-level glob
+/// can't cause the binary to attempt validation on out-of-scope files.
+///
+/// `path` should exist; the function reads it briefly to honour
+/// `<!-- skill:include-doc -->` / `<!-- skill:exclude-doc -->` overrides.
+pub fn is_in_scope(path: &Path, root: &Path, config: &DocsConfig) -> anyhow::Result<bool> {
+    if !path.is_file() {
+        return Ok(false);
+    }
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    if ext != "md" && ext != "mdx" {
+        return Ok(false);
+    }
+    if path.file_name().and_then(|s| s.to_str()).map_or(false, |n| n.ends_with(".skill.md")) {
+        return Ok(false);
+    }
+    let includes = compile_patterns(&config.include).context("compiling docs.include")?;
+    let excludes = compile_patterns(&config.exclude).context("compiling docs.exclude")?;
+    let rel = relative_path(root, path);
+    Ok(decide(&rel, path, &includes, &excludes))
+}
+
+fn decide(rel: &str, abs: &Path, includes: &[Pattern], excludes: &[Pattern]) -> bool {
+    let scope = peek_doc_scope(abs).unwrap_or(None);
+    match scope {
+        Some(DocScope::Include) => true,
+        Some(DocScope::Exclude) => false,
+        None => matches_any(includes, rel) && !matches_any(excludes, rel),
+    }
+}
+
+fn relative_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|_| path.to_string_lossy().to_string())
 }
 
 fn compile_patterns(patterns: &[String]) -> anyhow::Result<Vec<Pattern>> {
@@ -208,5 +231,40 @@ mod tests {
             rel: "foo.mdx".to_string(),
         };
         assert_eq!(d.skill_path(), PathBuf::from("/x/foo.mdx.skill.md"));
+    }
+
+    #[test]
+    fn is_in_scope_filters_per_file() {
+        let tmp = TempDir::new().unwrap();
+        write(tmp.path(), "guides/foo.mdx", fm());
+        write(tmp.path(), "queues/README.md", "rendered worker artifact, no frontmatter\n");
+
+        let cfg = cfg(&["guides/**/*.mdx"], &[]);
+        // In-scope: matches include glob.
+        assert!(is_in_scope(&tmp.path().join("guides/foo.mdx"), tmp.path(), &cfg).unwrap());
+        // Out of scope: outside the include glob — even though it's a .md
+        // file under the root, it's not what the consumer asked us to check.
+        assert!(!is_in_scope(&tmp.path().join("queues/README.md"), tmp.path(), &cfg).unwrap());
+    }
+
+    #[test]
+    fn is_in_scope_honours_marker_override() {
+        let tmp = TempDir::new().unwrap();
+        write(
+            tmp.path(),
+            "guides/CHANGELOG.md",
+            &format!("{}\n<!-- skill:include-doc -->\n", fm()),
+        );
+        let cfg = cfg(&["**/*.md"], &["**/CHANGELOG.md"]);
+        // Glob would exclude, but the marker forces it in.
+        assert!(is_in_scope(&tmp.path().join("guides/CHANGELOG.md"), tmp.path(), &cfg).unwrap());
+    }
+
+    #[test]
+    fn is_in_scope_skips_skill_artifacts() {
+        let tmp = TempDir::new().unwrap();
+        write(tmp.path(), "foo.mdx.skill.md", "rendered\n");
+        let cfg = cfg(&["**/*.md"], &[]);
+        assert!(!is_in_scope(&tmp.path().join("foo.mdx.skill.md"), tmp.path(), &cfg).unwrap());
     }
 }

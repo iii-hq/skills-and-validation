@@ -264,14 +264,40 @@ Annotations and step summary are processed by the runner itself — no token, no
 | Input               | Default                  | Description                                                                                                                        |
 | ------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix                                                                                   |
+| `config-path`       | `.skill-check.yaml`      | Path to the `.skill-check.yaml` controlling this run. Override per matrix entry to validate multiple modes in one repo.            |
 | `workers-glob`      | `*/iii.worker.yaml`      | Worker mode: glob of worker manifests to verify. Ignored in docs mode.                                                             |
-| `docs-glob`         | `**/*.md **/*.mdx`       | Docs mode: glob(s) of doc files to verify (space-separated). Ignored in worker mode.                                               |
+| `docs-glob`         | `**/*.md **/*.mdx`       | Docs mode: glob(s) of doc files to verify (space-separated). The binary additionally filters per-file against `docs.include`/`docs.exclude`, so a permissive glob can't slip non-doc files into the renderer. |
 | `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                                                                                            |
 | `vale-version`      | `3.14.1`                 | Pinned Vale version                                                                                                                |
 | `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                            |
 | `write`             | `false`                  | Auto-render and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`.         |
 
-The action auto-detects the mode by reading `.skill-check.yaml`. Worker-mode consumers leave `docs-glob` at its default (and it's ignored); docs-mode consumers leave `workers-glob` at its default (also ignored).
+The action auto-detects the mode by reading the `.skill-check.yaml` named by `config-path`. Worker-mode consumers leave `docs-glob` at its default (and it's ignored); docs-mode consumers leave `workers-glob` at its default (also ignored).
+
+#### Validating both modes in one repo (matrix)
+
+Repos that mix worker dirs and docs run the action multiple times via a matrix strategy — one entry per controlling config. The sticky PR comment is keyed off `config-path`, so each matrix run gets its own comment instead of clobbering the previous one.
+
+```yaml
+jobs:
+  skill-check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - config-path: .skill-check.yaml             # workers at the repo root
+          - config-path: docs/.skill-check.yaml         # docs under docs/
+            docs-glob: docs/**/*.md docs/**/*.mdx
+    steps:
+      - uses: actions/checkout@v5
+      - uses: iii-hq/skills-and-validation@v0.2
+        with:
+          config-path: ${{ matrix.config-path }}
+          docs-glob: ${{ matrix.docs-glob || '**/*.md **/*.mdx' }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Each matrix entry produces an independent status check, so branch-protection rules can require both to pass.
 
 ### Render-then-verify ordering
 
