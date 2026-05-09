@@ -151,3 +151,28 @@ jobs:
             [ -f "$f" ] || continue
             gh release upload "$tag" "$f" --repo "$GITHUB_REPOSITORY" --clobber
           done
+
+      # Re-point the floating major.minor tag (e.g. v0.1) at this commit so
+      # consumers can `uses: iii-hq/skills-and-validation@v0.1` and pick up
+      # every patch on the line without editing their workflow file.
+      - name: Force-update floating major.minor tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="${{ steps.ver.outputs.tag }}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tag '$tag' is not vMAJOR.MINOR.PATCH; skipping floating tag"
+            exit 0
+          fi
+          minor=$(echo "$tag" | sed -E 's/^(v[0-9]+\.[0-9]+)\.[0-9]+$/\1/')
+          sha="${{ github.sha }}"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${minor}" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${minor}" \
+              -f sha="$sha" -F force=true
+            echo "updated floating tag ${minor} -> $sha"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${minor}" -f sha="$sha"
+            echo "created floating tag ${minor} -> $sha"
+          fi

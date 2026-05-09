@@ -21,6 +21,41 @@ VERSION="${1:?missing version arg}"
 DEST="${2:?missing dest-dir arg}"
 REPO="iii-hq/skills-and-validation"
 
+# --- resolve major.minor to latest patch ----------------------------------
+# Consumers can pin "0.1" in .skill-check.yaml to track every patch on the
+# 0.1.* line without editing the file each release. Anything matching a
+# full X.Y.Z (with optional pre-release suffix) is used as-is.
+if [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+  echo "resolving '$VERSION' to latest patch in $REPO..." >&2
+  api="https://api.github.com/repos/${REPO}/releases?per_page=100"
+  http=$(curl -sL -o /tmp/skv-releases.json -w '%{http_code}' "$api" 2>/dev/null || echo "000")
+  if [ "$http" = "401" ] || [ "$http" = "403" ] || [ "$http" = "404" ]; then
+    if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+      gh api "repos/${REPO}/releases?per_page=100" > /tmp/skv-releases.json
+      http=200
+    elif [ -n "${GITHUB_TOKEN:-}" ]; then
+      http=$(curl -sL -o /tmp/skv-releases.json -w '%{http_code}' \
+        -H "Authorization: Bearer ${GITHUB_TOKEN}" "$api")
+    fi
+  fi
+  if [ "$http" != "200" ]; then
+    echo "ERROR: GitHub API returned $http while listing releases of $REPO" >&2
+    exit 1
+  fi
+  resolved=$(grep -E '"tag_name"' /tmp/skv-releases.json \
+    | sed -E 's/.*"tag_name": *"v([0-9]+\.[0-9]+\.[0-9]+)".*/\1/' \
+    | grep -E "^${VERSION}\\.[0-9]+$" \
+    | sort -V \
+    | tail -1)
+  rm -f /tmp/skv-releases.json
+  if [ -z "$resolved" ]; then
+    echo "ERROR: no release matching v${VERSION}.* in $REPO" >&2
+    exit 1
+  fi
+  echo "resolved to $resolved" >&2
+  VERSION="$resolved"
+fi
+
 # --- detect target triple --------------------------------------------------
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64)
