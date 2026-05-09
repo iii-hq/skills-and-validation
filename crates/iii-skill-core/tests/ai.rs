@@ -113,7 +113,7 @@ fn ai_check_passes_example_readme_when_key_present() {
         return;
     }
 
-    let example_readme = repo_root().join("fixtures/example-worker").join("README.md");
+    let example_readme = repo_root().join("templates/example-worker").join("README.md");
     let result = iii_skill_core::ai::check_artifact(
         &example_readme,
         &load_rules(),

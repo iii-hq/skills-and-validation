@@ -14,7 +14,7 @@ crates/iii-skill-render  — render-only binary (no network deps)
 crates/iii-skill-check   — verify + verify-rendered binary (Vale + AI)
 content/                 — project-rules, styles, iii-skill-authoring, .vale.ini
 templates/               — .skill-check.yaml the consumer copies into their repo
-fixtures/example-worker  — golden render fixture used by tests + dogfood
+templates/example-worker  — golden render fixture used by tests + dogfood
 scripts/                 — shared between the composite action and the workers' pre-commit hook
 action.yml               — composite action consumed via `uses: iii-hq/skills-and-validation@v1`
 ```
@@ -72,21 +72,21 @@ The AI-layer test is gated on `ANTHROPIC_API_KEY` and prints a skip message when
 
 ```bash
 # render the fixture into memory (does not write)
-./target/debug/iii-skill-render fixtures/example-worker
-# -> rendered fixtures/example-worker (readme 2169 bytes, skill 616 bytes, 3 leaves)
+./target/debug/iii-skill-render templates/example-worker
+# -> rendered templates/example-worker (readme 2169 bytes, skill 616 bytes, 3 leaves)
 
 # write rendered artifacts to disk (idempotent — should produce no diff)
-./target/debug/iii-skill-render fixtures/example-worker --write
-git diff fixtures/example-worker
+./target/debug/iii-skill-render templates/example-worker --write
+git diff templates/example-worker
 # -> empty diff confirms the renderer is in sync with the golden fixture
 
 # drift check: re-renders, byte-compares against on-disk artifacts
-./target/debug/iii-skill-check verify-rendered fixtures/example-worker
-# -> rendered artifacts match fixtures/example-worker
+./target/debug/iii-skill-check verify-rendered templates/example-worker
+# -> rendered artifacts match templates/example-worker
 
 # structure + vale layers (no API key needed)
-./target/debug/iii-skill-check verify fixtures/example-worker --layers structure,vale
-# -> verify clean across [structure,vale] for fixtures/example-worker
+./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale
+# -> verify clean across [structure,vale] for templates/example-worker
 ```
 
 `vale` must be on `$PATH` for the vale layer. If you don't already have it, follow the upstream install instructions: https://docs.vale.sh/topics/installation
@@ -110,8 +110,8 @@ Or run the binary directly against the clean fixture:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-…
-./target/debug/iii-skill-check verify fixtures/example-worker --layers structure,vale,ai
-# -> verify clean across [structure,vale,ai] for fixtures/example-worker
+./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale,ai
+# -> verify clean across [structure,vale,ai] for templates/example-worker
 ```
 
 ---
@@ -147,8 +147,8 @@ ls /tmp/install
 # -> bin  content  templates  VERSION
 
 # 4. confirm bundle::find_content_root walks up from bin/ to sibling content/
-/tmp/install/bin/iii-skill-check verify-rendered fixtures/example-worker
-/tmp/install/bin/iii-skill-check verify fixtures/example-worker --layers structure,vale
+/tmp/install/bin/iii-skill-check verify-rendered templates/example-worker
+/tmp/install/bin/iii-skill-check verify templates/example-worker --layers structure,vale
 # both should print "verify clean"
 ```
 
@@ -193,7 +193,7 @@ After the first push to `origin/main`, three workflows fire:
 | Trigger             | Workflow      | What runs                                                                      |
 | ------------------- | ------------- | ------------------------------------------------------------------------------ |
 | PR / push to main   | `ci.yml`      | `cargo test --workspace`                                                       |
-| PR / push to main   | `dogfood.yml` | release build + `verify-rendered` + `verify` against `fixtures/example-worker` |
+| PR / push to main   | `dogfood.yml` | release build + `verify-rendered` + `verify` against `templates/example-worker` |
 | `v*` tag / dispatch | `release.yml` | 6-target build matrix → tarballs → GitHub Release                              |
 
 Watch them at `https://github.com/iii-hq/skills-and-validation/actions`.

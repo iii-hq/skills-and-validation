@@ -43,7 +43,7 @@ fn write_minimal_worker(dir: &Path, name: &str) {
 
 #[test]
 fn example_worker_passes_structure_check() {
-    let example = repo_root().join("fixtures/example-worker");
+    let example = repo_root().join("templates/example-worker");
     let violations =
         iii_skill_core::structure::check(&example).expect("structure check should not error");
     assert!(

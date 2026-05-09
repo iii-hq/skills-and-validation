@@ -125,25 +125,25 @@ echo "+ cargo test --workspace --no-fail-fast"
 cargo test --workspace --no-fail-fast
 
 # ----------------------------------------------------------------------
-phase B "binaries against fixtures/example-worker"
+phase B "binaries against templates/example-worker"
 # ----------------------------------------------------------------------
-echo "+ iii-skill-render fixtures/example-worker (memory-only)"
-./target/debug/iii-skill-render fixtures/example-worker
+echo "+ iii-skill-render templates/example-worker (memory-only)"
+./target/debug/iii-skill-render templates/example-worker
 
-echo "+ iii-skill-render fixtures/example-worker --write"
-./target/debug/iii-skill-render fixtures/example-worker --write
-if ! git diff --quiet fixtures/example-worker; then
+echo "+ iii-skill-render templates/example-worker --write"
+./target/debug/iii-skill-render templates/example-worker --write
+if ! git diff --quiet templates/example-worker; then
   echo "ERROR: --write produced a diff against the golden fixture:" >&2
-  git --no-pager diff fixtures/example-worker >&2
+  git --no-pager diff templates/example-worker >&2
   exit 1
 fi
 echo "  (empty diff — renderer matches the golden fixture)"
 
-echo "+ iii-skill-check verify-rendered fixtures/example-worker"
-./target/debug/iii-skill-check verify-rendered fixtures/example-worker
+echo "+ iii-skill-check verify-rendered templates/example-worker"
+./target/debug/iii-skill-check verify-rendered templates/example-worker
 
-echo "+ iii-skill-check verify fixtures/example-worker --layers structure,vale"
-./target/debug/iii-skill-check verify fixtures/example-worker --layers structure,vale
+echo "+ iii-skill-check verify templates/example-worker --layers structure,vale"
+./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale
 
 # ----------------------------------------------------------------------
 phase C "AI layer (live API call)"
@@ -153,8 +153,8 @@ if [ "$NO_AI" -eq 1 ]; then
 elif [ -z "${!KEY_VAR:-}" ]; then
   echo "(skipped: $KEY_VAR not set; checked environment and .env)"
 else
-  echo "+ iii-skill-check verify fixtures/example-worker --layers structure,vale,ai (auth via \$$KEY_VAR)"
-  ./target/debug/iii-skill-check verify fixtures/example-worker --layers structure,vale,ai
+  echo "+ iii-skill-check verify templates/example-worker --layers structure,vale,ai (auth via \$$KEY_VAR)"
+  ./target/debug/iii-skill-check verify templates/example-worker --layers structure,vale,ai
 fi
 
 # ----------------------------------------------------------------------
@@ -179,10 +179,10 @@ rm -rf "$INSTALL_DIR" && mkdir -p "$INSTALL_DIR"
 tar -xzf "$TARBALL" -C "$INSTALL_DIR" --strip-components=1
 
 echo "+ extracted iii-skill-check verify-rendered"
-"$INSTALL_DIR/bin/iii-skill-check" verify-rendered fixtures/example-worker
+"$INSTALL_DIR/bin/iii-skill-check" verify-rendered templates/example-worker
 
 echo "+ extracted iii-skill-check verify --layers structure,vale"
-"$INSTALL_DIR/bin/iii-skill-check" verify fixtures/example-worker --layers structure,vale
+"$INSTALL_DIR/bin/iii-skill-check" verify templates/example-worker --layers structure,vale
 
 # ----------------------------------------------------------------------
 phase E "scripts/verify.sh against the extracted bundle"

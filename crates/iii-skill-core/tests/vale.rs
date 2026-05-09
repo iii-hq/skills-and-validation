@@ -15,7 +15,7 @@ fn vale_config() -> PathBuf {
 
 #[test]
 fn vale_passes_example_artifacts() {
-    let example = repo_root().join("fixtures/example-worker");
+    let example = repo_root().join("templates/example-worker");
 
     let readme = example.join("README.md");
     let skill = example.join("skill.md");

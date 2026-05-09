@@ -15,7 +15,7 @@ env:
 
 jobs:
   verify-fixture:
-    name: verify fixtures/example-worker
+    name: verify templates/example-worker
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
       - name: Build release binaries
         run: cargo build --release --workspace
       - name: verify-rendered (drift check)
-        run: ./target/release/iii-skill-check verify-rendered fixtures/example-worker
+        run: ./target/release/iii-skill-check verify-rendered templates/example-worker
       - name: verify (structure + vale + ai)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -39,4 +39,4 @@ jobs:
             layers="structure,vale"
             echo "::warning::ANTHROPIC_API_KEY not set; skipping AI layer"
           fi
-          ./target/release/iii-skill-check verify fixtures/example-worker --layers "$layers"
+          ./target/release/iii-skill-check verify templates/example-worker --layers "$layers"

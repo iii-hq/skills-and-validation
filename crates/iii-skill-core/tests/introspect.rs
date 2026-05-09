@@ -10,7 +10,7 @@ fn repo_root() -> PathBuf {
 
 #[test]
 fn read_manifest_parses_example_worker() {
-    let example = repo_root().join("fixtures/example-worker");
+    let example = repo_root().join("templates/example-worker");
     let manifest = iii_skill_core::introspect::read_manifest(&example)
         .expect("read_manifest should succeed for example-worker");
 

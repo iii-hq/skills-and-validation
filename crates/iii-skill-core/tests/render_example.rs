@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 /// TDD spec for the renderer.
 ///
-/// Asserts that running `render_worker` against `fixtures/example-worker`
+/// Asserts that running `render_worker` against `templates/example-worker`
 /// produces, byte-for-byte, the checked-in `README.md`, `skill.md`, and
 /// `skills/*.md` artifacts.
 ///
@@ -16,7 +16,7 @@ fn render_example_matches_golden() {
         .and_then(|p| p.parent())
         .unwrap()
         .to_path_buf();
-    let example = repo_root.join("fixtures/example-worker");
+    let example = repo_root.join("templates/example-worker");
 
     let outputs = iii_skill_core::render::render_worker(&example)
         .expect("render_worker should succeed against the example-worker fixture");
