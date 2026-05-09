@@ -75,6 +75,7 @@ runs:
       run: |
         set -o pipefail
         log="${RUNNER_TEMP:-/tmp}/skv-verify.log"
+        body="${RUNNER_TEMP:-/tmp}/skv-summary.md"
         rc=0
         "${{ github.action_path }}/scripts/verify.sh" \
           "${{ inputs.workers-glob }}" \
@@ -84,12 +85,15 @@ runs:
         # consumer permission required.
         "${{ github.action_path }}/scripts/annotate.sh" "$log" || true
 
-        # Markdown report on the workflow run page (Checks tab).
-        "${{ github.action_path }}/scripts/summary.sh" "$log" \
-          >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+        # Render the markdown report once; reuse it for both the run-summary
+        # surface and the optional sticky PR-comment so both say the same
+        # thing (same closer line, same per-layer table).
+        "${{ github.action_path }}/scripts/summary.sh" "$log" > "$body"
+        cat "$body" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
-        # Hand the log path to the optional PR-comment step.
+        # Hand both paths to the optional PR-comment step.
         echo "log=$log" >> "$GITHUB_OUTPUT"
+        echo "summary=$body" >> "$GITHUB_OUTPUT"
         exit $rc
 
     # Sticky PR comment with the same markdown report. Requires the
@@ -97,15 +101,12 @@ runs:
     # `permissions:` block; without it, this step no-ops via
     # continue-on-error so it never causes a red CI run on its own.
     - name: Post sticky PR comment (opt-in via pull-requests:write)
-      if: ${{ always() && github.event_name == 'pull_request' }}
+      if: ${{ always() && github.event_name == 'pull_request' && steps.verify.outputs.summary != '' }}
       continue-on-error: true
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        body="$(mktemp)"
-        "${{ github.action_path }}/scripts/summary.sh" \
-          "${{ steps.verify.outputs.log }}" > "$body"
         "${{ github.action_path }}/scripts/pr-comment.sh" \
           "${{ github.event.pull_request.number }}" \
-          "$body"
+          "${{ steps.verify.outputs.summary }}"

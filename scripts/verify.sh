@@ -39,6 +39,15 @@ fi
 KEY_VAR="$(awk '/^[[:space:]]*api_key_env_var:/ {print $2; exit}' .skill-check.yaml 2>/dev/null || true)"
 KEY_VAR="${KEY_VAR:-ANTHROPIC_API_KEY}"
 
+# Compute the effective layer set once: drop the AI layer up front when its
+# env var is unset, so per-worker output and the summary line stay in sync.
+effective_layers="$LAYERS"
+if [ -z "${!KEY_VAR:-}" ] && [[ "$LAYERS" == *ai* ]]; then
+  effective_layers="$(echo "$LAYERS" | sed -E 's/,?ai,?/,/g; s/^,//; s/,$//')"
+  [ -z "$effective_layers" ] && effective_layers="structure"
+  echo "::warning::$KEY_VAR not set; running layers=$effective_layers"
+fi
+
 fail=0
 verified=0
 skipped=0
@@ -53,12 +62,6 @@ for manifest in $WORKERS_GLOB; do
   if ! "$BIN" verify-rendered "$dir"; then
     fail=1
   fi
-  effective_layers="$LAYERS"
-  if [ -z "${!KEY_VAR:-}" ] && [[ "$LAYERS" == *ai* ]]; then
-    effective_layers="$(echo "$LAYERS" | sed -E 's/,?ai,?/,/g; s/^,//; s/,$//')"
-    [ -z "$effective_layers" ] && effective_layers="structure"
-    echo "::warning::$KEY_VAR not set; running layers=$effective_layers"
-  fi
   if ! "$BIN" verify "$dir" --layers "$effective_layers"; then
     fail=1
   fi
@@ -72,6 +75,7 @@ if [ "$total" -eq 0 ]; then
 else
   echo
   echo "$verified verified, $skipped skipped (no docs/)"
+  echo "layers ran: $effective_layers"
 fi
 
 exit $fail
