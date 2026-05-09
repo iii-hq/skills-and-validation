@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 struct Cli {
     #[command(subcommand)]
     command: Command,
+    /// Continue running even when a newer release is available.
+    #[arg(long, global = true)]
+    allow_old_version: bool,
 }
 
 #[derive(Subcommand)]
@@ -34,6 +37,7 @@ enum Command {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    skill_check_update_gate(cli.allow_old_version)?;
     match cli.command {
         Command::Verify {
             worker,
@@ -43,6 +47,26 @@ fn main() -> anyhow::Result<()> {
         } => run_verify(&worker, &layers, rules_dir, vale_config),
         Command::VerifyRendered { worker } => run_verify_rendered(&worker),
     }
+}
+
+fn skill_check_update_gate(allow_old: bool) -> anyhow::Result<()> {
+    use iii_skill_core::update_check::{check, UpdateStatus};
+    if let UpdateStatus::OutOfDate {
+        current,
+        latest,
+        install_cmd,
+    } = check()
+    {
+        eprintln!("warning: a newer release is available ({current} -> {latest})");
+        eprintln!("  install: {install_cmd}");
+        if !allow_old {
+            eprintln!();
+            eprintln!("re-run with --allow-old-version to proceed on the older binary");
+            std::process::exit(2);
+        }
+        eprintln!("  proceeding with the older binary (--allow-old-version)");
+    }
+    Ok(())
 }
 
 fn run_verify(

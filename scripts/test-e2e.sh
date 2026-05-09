@@ -50,6 +50,11 @@ done
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Local cargo-built binaries don't have RELEASE_VERSION baked in, so the
+# runtime update check skips them anyway — but be explicit so test runs
+# never reach for the GitHub API.
+export SKV_NO_UPDATE_CHECK=1
+
 # Resolve the env-var name the validator reads (per .skill-check.yaml's
 # `api_key_env_var` field) and, if that var isn't already in the
 # environment, populate it from .env. Existing env vars win over .env.

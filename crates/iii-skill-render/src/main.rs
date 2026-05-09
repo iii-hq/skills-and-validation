@@ -12,10 +12,15 @@ struct Cli {
     /// Write rendered files to disk; without this flag, renders to memory only.
     #[arg(long)]
     write: bool,
+    /// Continue running even when a newer release is available.
+    #[arg(long)]
+    allow_old_version: bool,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    skill_check_update_gate(cli.allow_old_version)?;
+
     let out = iii_skill_core::render::render_worker(&cli.worker)?;
     println!(
         "rendered {} (readme {} bytes, skill {} bytes, {} leaves)",
@@ -46,6 +51,26 @@ fn main() -> Result<()> {
             }
         }
         println!("wrote artifacts to {}", cli.worker.display());
+    }
+    Ok(())
+}
+
+fn skill_check_update_gate(allow_old: bool) -> Result<()> {
+    use iii_skill_core::update_check::{check, UpdateStatus};
+    if let UpdateStatus::OutOfDate {
+        current,
+        latest,
+        install_cmd,
+    } = check()
+    {
+        eprintln!("warning: a newer release is available ({current} -> {latest})");
+        eprintln!("  install: {install_cmd}");
+        if !allow_old {
+            eprintln!();
+            eprintln!("re-run with --allow-old-version to proceed on the older binary");
+            std::process::exit(2);
+        }
+        eprintln!("  proceeding with the older binary (--allow-old-version)");
     }
     Ok(())
 }

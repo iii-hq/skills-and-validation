@@ -67,6 +67,9 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
+        # The runner already pinned a specific release tarball; no need to
+        # nag about newer versions (or hit the GitHub API) inside the action.
+        SKV_NO_UPDATE_CHECK: "1"
       run: |
         bin="${{ github.workspace }}/.skill-check/bin/iii-skill-render"
         shopt -s nullglob globstar 2>/dev/null || shopt -s nullglob
@@ -112,6 +115,7 @@ runs:
       env:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         INSTALL_DIR: ${{ github.workspace }}/.skill-check
+        SKV_NO_UPDATE_CHECK: "1"
       run: |
         set -o pipefail
         log="${RUNNER_TEMP:-/tmp}/skv-verify.log"

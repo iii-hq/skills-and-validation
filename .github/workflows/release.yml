@@ -75,6 +75,11 @@ jobs:
 
       - name: Build
         shell: bash
+        env:
+          # Bake the released tag's version (without the v prefix) into the
+          # binary via option_env!("RELEASE_VERSION"). The runtime update
+          # check uses this to decide whether the running binary is current.
+          RELEASE_VERSION: ${{ steps.ver.outputs.version }}
         run: |
           if [ "${{ matrix.use_cross }}" = "true" ]; then
             cross build --release --workspace --target ${{ matrix.target }}

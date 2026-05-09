@@ -195,6 +195,20 @@ iii-skill-check verify <worker> --layers structure,vale   # skip AI
 
 Re-run `install.sh` whenever a new release lands. The `latest` tag floats to the most recent stable release, so the same one-liner installs the new version and re-points the symlinks.
 
+Both binaries check at runtime whether a newer release is available (via `https://api.github.com/repos/iii-hq/skills-and-validation/releases/latest`, cached for 24h at `~/.cache/skill-check/update-check.json`). When out of date, the binary prints the install command and exits with code 2 — pass `--allow-old-version` to proceed on the older binary anyway:
+
+```bash
+iii-skill-check verify <worker> --allow-old-version
+```
+
+To suppress the check entirely (offline runs, CI environments, scripted batch invocations), set `SKV_NO_UPDATE_CHECK=1`:
+
+```bash
+SKV_NO_UPDATE_CHECK=1 iii-skill-check verify <worker>
+```
+
+The composite action and `scripts/test-e2e.sh` set this automatically — only interactive local runs hit the API.
+
 ---
 
 ## Local end-to-end check
