@@ -58,20 +58,54 @@ fn companions_partial_appears_in_readme_install_section() {
 }
 
 #[test]
-fn companions_partial_does_not_appear_in_skill_md() {
+fn companions_partial_appears_in_skill_md() {
     let tmp = TempDir::new().unwrap();
     write_minimal_worker_with_companions(tmp.path(), "fixture", Some(COMPANION_BODY));
 
     let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
     assert!(
-        !outputs.skill.contains("To surface every"),
-        "companions content leaked into skill.md: {}",
+        outputs.skill.contains("To surface every registered skill"),
+        "companions framing absent from skill.md: {}",
         outputs.skill
     );
     assert!(
-        !outputs.skill.contains("iii worker add skills"),
-        "companions install line leaked into skill.md: {}",
+        outputs.skill.contains("iii worker add skills"),
+        "companions install command absent from skill.md: {}",
         outputs.skill
+    );
+}
+
+#[test]
+fn companions_llm_only_block_unwrapped_in_skill_kept_in_readme() {
+    let tmp = TempDir::new().unwrap();
+    let body = "Visible companion line.\n\n<!-- llm-only:start -->\nLLM-only guidance for agents.\n<!-- llm-only:end -->\n";
+    write_minimal_worker_with_companions(tmp.path(), "fixture", Some(body));
+
+    let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
+
+    // skill.md: markers stripped, the inner text is plain prose.
+    assert!(
+        outputs.skill.contains("LLM-only guidance for agents"),
+        "llm-only body absent from skill.md: {}",
+        outputs.skill
+    );
+    assert!(
+        !outputs.skill.contains("llm-only:start"),
+        "llm-only marker leaked into skill.md: {}",
+        outputs.skill
+    );
+
+    // README: markers preserved verbatim (HTML comments invisible at render
+    // time, but the source text still carries them as tooling metadata).
+    assert!(
+        outputs.readme.contains("LLM-only guidance for agents"),
+        "llm-only body absent from README: {}",
+        outputs.readme
+    );
+    assert!(
+        outputs.readme.contains("<!-- llm-only:start -->"),
+        "expected llm-only markers preserved in README: {}",
+        outputs.readme
     );
 }
 
