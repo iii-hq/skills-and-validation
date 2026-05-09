@@ -153,27 +153,37 @@ jobs:
             gh release upload "$tag" "$f" --repo "$GITHUB_REPOSITORY" --clobber
           done
 
-      # Re-point the floating major.minor tag (e.g. v0.1) at this commit so
-      # consumers can `uses: iii-hq/skills-and-validation@v0.1` and pick up
-      # every patch on the line without editing their workflow file.
-      - name: Force-update floating major.minor tag
+      # Re-point floating tags so consumers can pin a moving target:
+      #   `vMAJOR.MINOR` (e.g. v0.1) tracks every patch on its line —
+      #     used by `uses: iii-hq/skills-and-validation@v0.1` and
+      #     `version: 0.1` in .skill-check.yaml.
+      #   `latest` tracks the most recent stable release across all
+      #     versions — used by install.sh's default install path.
+      - name: Force-update floating tags
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           tag="${{ steps.ver.outputs.tag }}"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "tag '$tag' is not vMAJOR.MINOR.PATCH; skipping floating tag"
+            echo "tag '$tag' is not vMAJOR.MINOR.PATCH; skipping floating tags"
             exit 0
           fi
-          minor=$(echo "$tag" | sed -E 's/^(v[0-9]+\.[0-9]+)\.[0-9]+$/\1/')
           sha="${{ github.sha }}"
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${minor}" >/dev/null 2>&1; then
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${minor}" \
-              -f sha="$sha" -F force=true
-            echo "updated floating tag ${minor} -> $sha"
-          else
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-              -f ref="refs/tags/${minor}" -f sha="$sha"
-            echo "created floating tag ${minor} -> $sha"
-          fi
+          minor=$(echo "$tag" | sed -E 's/^(v[0-9]+\.[0-9]+)\.[0-9]+$/\1/')
+
+          repoint() {
+            local ref="$1"
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${ref}" >/dev/null 2>&1; then
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${ref}" \
+                -f sha="$sha" -F force=true
+              echo "updated floating tag ${ref} -> $sha"
+            else
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+                -f ref="refs/tags/${ref}" -f sha="$sha"
+              echo "created floating tag ${ref} -> $sha"
+            fi
+          }
+
+          repoint "$minor"
+          repoint latest
