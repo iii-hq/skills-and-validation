@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dogfood
       - name: Install Vale ${{ env.VALE_VERSION }}
         run: |
           curl -sL "https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz" \
@@ -27,6 +30,10 @@ jobs:
           vale --version
       - name: Build release binaries
         run: cargo build --release --workspace
+      # templates/example-worker ships sources only; render in place so
+      # the verify steps below have artifacts to check.
+      - name: Render templates/example-worker
+        run: ./target/release/iii-skill-render templates/example-worker --write
       - name: verify-rendered (drift check)
         run: ./target/release/iii-skill-check verify-rendered templates/example-worker
       - name: verify (structure + vale + ai)

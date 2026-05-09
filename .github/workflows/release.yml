@@ -50,6 +50,15 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      # Cache ~/.cargo/{registry,git} and target/. Keyed on Cargo.lock +
+      # target triple so a `cargo update` invalidates correctly. Cross-rs
+      # targets benefit primarily from the registry cache (the build itself
+      # runs inside a Docker container, so target/ reuse there is partial).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          shared-key: release
+
       - name: Install apt packages
         if: matrix.apt
         run: |
