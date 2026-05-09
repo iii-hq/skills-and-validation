@@ -11,7 +11,7 @@ Canonical rules for updating and maintaining `iii`.
 - [`sdks.md`](./sdks.md) — SDK reference page conventions.
 - [`cli.md`](./cli.md) — CLI naming and scope.
 - [`console.md`](./console.md) — Console (the web UI) scope.
-- [`config.md`](./config.md) — configuration file naming and adapter status.
+- [`config.md`](./config.md) — configuration file naming.
 
 When a rule applies to multiple surfaces, the canonical statement is in the most-specific file and
 the others link to it.

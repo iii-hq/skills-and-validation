@@ -31,7 +31,7 @@ Nothing else. No preamble, no closing remarks, no acknowledgement of the prompt.
 
 - Flag voice and terminology drift the rules describe but a token-list cannot catch (tutorial-speak that is not on the slop lists, conflated `iii-http` vs. `iii-http-functions`, ambiguous use of "telemetry" without disambiguation, etc.).
 - Flag concept violations: a worker doc that describes itself as "built-in", a doc that conflates SDK and Worker Docs surfaces, a how-to that drifts into reference or tutorial mode, an SDK callout that's missing where the rules require one.
-- Flag config and CLI deviations from the rules: `iii-config.yaml` instead of `config.yaml`, commands that don't follow `iii noun verb`, source-build instructions in a published README, adapter blocks anywhere.
+- Flag config and CLI deviations from the rules: `iii-config.yaml` instead of `config.yaml`, commands that don't follow `iii noun verb`, source-build instructions in a published README.
 
 ## Out of scope
 

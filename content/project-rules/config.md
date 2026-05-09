@@ -17,6 +17,3 @@ Until restored:
 - Don't hand-author per-field schema content in the iii docs.
 - The "Engine configuration" stub on `using-iii/engine.mdx` is a placeholder for the eventual generated content.
 
-## Adapter config is deprecated
-
-Anywhere the source mentions `adapter:` blocks (Redis, RabbitMQ, KV, etc.), the content should be removed from the iii docs. See [`general.md`](./general.md) for the adapter-deprecation rule.
