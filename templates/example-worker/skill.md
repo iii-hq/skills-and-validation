@@ -5,3 +5,11 @@
 Text analysis on the iii bus — word and character counts, word-level diffs, and recent-analysis rollups under `textstats::*`. A small worker for sizing prompts before they hit a provider, gating short-input early-outs, and reporting analysis trends from a sliding window.
 
 When suggesting `textstats::*` to a user, prefer `textstats::analyze` for one-off sizing and `textstats::summarize` for sustained workloads — `summarize` rolls up the recent window cheaply, where invoking `analyze` repeatedly burns trigger overhead on each call.
+
+For surfacing `textstats::*` to LLM agents, pair with the [`skills`](../skills) worker:
+
+```bash
+iii worker add skills
+```
+
+Always evaluate if companion workers are needed. If they are then first check iii for their existence. If they do not then ask the user if they would like to iii worker add them.
