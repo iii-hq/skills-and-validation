@@ -20,6 +20,13 @@ inputs:
   anthropic-api-key:
     description: Anthropic API key for the AI layer (omit to skip AI)
     required: false
+  write:
+    description: |
+      Auto-render workers and commit the rendered diff back to the PR
+      branch when the source partials drift from their rendered output.
+      Requires the consumer's workflow to grant `contents: write`.
+      Defaults to false (read-only validation).
+    default: "false"
 
 runs:
   using: composite
@@ -50,6 +57,39 @@ runs:
         "${{ github.action_path }}/scripts/download.sh" \
           "${{ steps.ver.outputs.version }}" \
           "${{ github.workspace }}/.skill-check"
+
+    # Auto-fix opt-in: when `write: true`, re-render every matching worker
+    # and commit the rendered diff back to the PR branch. Verify still
+    # runs afterwards to catch voice/structure violations the renderer
+    # can't fix on its own.
+    - name: Auto-render and commit (write mode)
+      if: ${{ inputs.write == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bin="${{ github.workspace }}/.skill-check/bin/iii-skill-render"
+        shopt -s nullglob globstar 2>/dev/null || shopt -s nullglob
+        for manifest in ${{ inputs.workers-glob }}; do
+          dir="$(dirname "$manifest")"
+          [ -d "$dir/docs" ] || continue
+          "$bin" "$dir" --write
+        done
+
+        if [ -z "$(git status --porcelain)" ]; then
+          echo "no rendered drift; nothing to commit"
+          exit 0
+        fi
+
+        git config user.name  "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add -A
+        git commit -m "chore: auto-render worker docs"
+        # GITHUB_HEAD_REF is the PR branch on the head repo. Push needs
+        # contents: write, which the consumer's workflow grants explicitly
+        # when opting into write mode.
+        git push origin "HEAD:${GITHUB_HEAD_REF}"
+        echo "committed rendered drift to ${GITHUB_HEAD_REF}"
 
     - name: Install Vale
       shell: bash

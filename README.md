@@ -86,13 +86,96 @@ Annotations and step summary are processed by the runner itself — no token, no
 
 ### Action inputs
 
-| Input               | Default                  | Description                                             |
-| ------------------- | ------------------------ | ------------------------------------------------------- |
-| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix        |
-| `workers-glob`      | `*/iii.worker.yaml`      | Glob of worker manifests to verify                      |
-| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                 |
-| `vale-version`      | `3.14.1`                 | Pinned Vale version                                     |
-| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset |
+| Input               | Default                  | Description                                                                                                              |
+| ------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix                                                                         |
+| `workers-glob`      | `*/iii.worker.yaml`      | Glob of worker manifests to verify                                                                                       |
+| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                                                                                  |
+| `vale-version`      | `3.14.1`                 | Pinned Vale version                                                                                                      |
+| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                  |
+| `write`             | `false`                  | Auto-render workers and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`. |
+
+### Auto-fix mode (opt-in)
+
+With `write: true` plus `contents: write`, the action runs `iii-skill-render --write` against every matching worker before verifying. If that produces changes (someone edited `docs/*.md` but forgot to re-render), the action commits them with author `github-actions[bot]` and pushes to the PR branch:
+
+```yaml
+permissions:
+  contents: write          # required for auto-fix
+  pull-requests: write     # required for the sticky PR comment
+
+jobs:
+  skill-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref }}     # check out the PR branch directly
+                                          # (not the merge commit) so push-back lands
+      - uses: iii-hq/skills-and-validation@v0.1
+        with:
+          write: true
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+The follow-up commit doesn't trigger another workflow run (GitHub's default `GITHUB_TOKEN` doesn't fire downstream `push`/`pull_request` events). Voice / structure violations the renderer can't fix on its own still show up in the verify output.
+
+Forks: write mode only works on PRs opened from the same repository; the consumer's `GITHUB_TOKEN` can't push to a fork. Validation-only mode (`write: false`, the default) works for both.
+
+---
+
+## Local development
+
+Workers are authored by hand under `<worker>/docs/*.md`, then **rendered** into `README.md`, `skill.md`, and `skills/*.md`. The same byte-exact match the action enforces in CI is what `iii-skill-render --write` produces — so the easy-mode flow is to install the binaries locally and let a pre-commit hook keep things in sync.
+
+### One-line install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash
+```
+
+This downloads the latest stable release for your host into `~/.local/share/skill-check/<version>/`, points `~/.local/share/skill-check/current` at it, and symlinks `iii-skill-render` and `iii-skill-check` into `~/.local/bin/`. Add `~/.local/bin` to your `PATH` if it isn't already.
+
+Pin to a major.minor line or an exact version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh \
+  | bash -s -- 0.1
+# or
+curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh \
+  | bash -s -- 0.1.3
+```
+
+### Pre-commit hook
+
+After install, run from the root of any consumer repo:
+
+```bash
+~/.local/share/skill-check/current/scripts/install-hook.sh
+```
+
+This symlinks the bundled `pre-commit-hook.sh` into `.git/hooks/pre-commit`. On every commit it:
+
+1. Detects which staged paths belong to a worker dir (has `iii.worker.yaml` + `docs/`).
+2. Re-renders each affected worker with `iii-skill-render --write`.
+3. Re-stages the rendered `README.md`, `skill.md`, `skills/*.md`.
+4. Runs `iii-skill-check verify-rendered` + `verify --layers structure,vale`.
+5. Blocks the commit on remaining violations. Bypass with `git commit --no-verify`.
+
+Skips the AI layer locally (slow + costs API tokens). CI runs the AI layer on every PR.
+
+### Manual usage
+
+```bash
+iii-skill-render <worker> --write       # render docs/* into README/skill/skills
+iii-skill-check verify-rendered <worker> # confirm no drift
+iii-skill-check verify <worker>          # all layers
+iii-skill-check verify <worker> --layers structure,vale   # skip AI
+```
+
+### Upgrading
+
+Re-run `install.sh` whenever a new release lands. The `latest` tag floats to the most recent stable release, so the same one-liner installs the new version and re-points the symlinks.
 
 ---
 
