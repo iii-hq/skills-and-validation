@@ -155,9 +155,9 @@ fn resolve_rules_dir(
         .map(|c| c.join("project-rules"))
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "could not locate project-rules — pass --rules-dir, set rules.path \
-                 in .skill-check.yaml, or run a release-installed iii-skill-check \
-                 with bundled content"
+                "could not locate project-rules — install via scripts/install.sh \
+                 (drops content into ~/.local/share/skill-check/current/), pass \
+                 --rules-dir, or set rules.path in .skill-check.yaml"
             )
         })
 }
@@ -178,9 +178,9 @@ fn resolve_vale_config(
         .map(|c| c.join(".vale.ini"))
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "could not locate .vale.ini — pass --vale-config, place a .vale.ini \
-                 next to .skill-check.yaml, or run a release-installed \
-                 iii-skill-check with bundled content"
+                "could not locate .vale.ini — install via scripts/install.sh \
+                 (drops .vale.ini into ~/.local/share/skill-check/current/content/), \
+                 pass --vale-config, or place a .vale.ini next to .skill-check.yaml"
             )
         })
 }
