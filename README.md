@@ -25,26 +25,17 @@ action.yml               — composite action consumed via `uses: iii-hq/skills-
 
 Each consumer repo ships one `.skill-check.yaml` at the parent of its worker directories — typically the repo root when workers are top-level (`<repo>/<worker>/iii.worker.yaml`). The validator binary, the composite action, and the pre-commit hook all read it as the single source of truth for which release of `skills-and-validation` to use and how the AI layer authenticates.
 
-The recommended starting form (also shipped at `templates/.skill-check.yaml`):
+See `templates/.skill-check.yaml` for an example file.
 
-```yaml
-version: 0.1.0
-ai_check:
-  provider: anthropic
-  model: claude-opus-4-7
-  api_key_env_var: ANTHROPIC_API_KEY
-  max_tokens: 6000
-```
-
-| Field                     | Required | Purpose                                                                                                                                                                  |
-| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `version`                 | yes      | Pinned release tag (without the `v` prefix). The downloader fetches the matching tarball; the action picks up the same value.                                            |
-| `ai_check.provider`       | yes      | LLM provider for the AI layer. Currently only `anthropic` is supported.                                                                                                  |
-| `ai_check.model`          | yes      | Anthropic model id (e.g. `claude-opus-4-7`).                                                                                                                             |
-| `ai_check.api_key_env_var`| yes      | Name of the env var carrying the API key. The validator, the composite action, `scripts/verify.sh`, and `scripts/test-e2e.sh` all read this same field.                  |
-| `ai_check.max_tokens`     | yes      | Output token budget per AI call.                                                                                                                                         |
-| `rules.path`              | no       | Local override for `project-rules/`. Omit to use the rules bundled with the released validator.                                                                          |
-| `styles.path`             | no       | Local override for the Vale `styles/` dir. Omit to use the bundled styles.                                                                                               |
+| Field                      | Required | Purpose                                                                                                                                                 |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`                  | yes      | Pinned release tag (without the `v` prefix). The downloader fetches the matching tarball; the action picks up the same value.                           |
+| `ai_check.provider`        | yes      | LLM provider for the AI layer. Currently only `anthropic` is supported.                                                                                 |
+| `ai_check.model`           | yes      | Anthropic model id (e.g. `claude-opus-4-7`).                                                                                                            |
+| `ai_check.api_key_env_var` | yes      | Name of the env var carrying the API key. The validator, the composite action, `scripts/verify.sh`, and `scripts/test-e2e.sh` all read this same field. |
+| `ai_check.max_tokens`      | yes      | Output token budget per AI call.                                                                                                                        |
+| `rules.path`               | no       | Local override for `project-rules/`. Omit to use the rules bundled with the released validator.                                                         |
+| `styles.path`              | no       | Local override for the Vale `styles/` dir. Omit to use the bundled styles.                                                                              |
 
 Bump `version` whenever you want a newer release of the validator; everything else is wiring you usually leave alone.
 
@@ -64,8 +55,9 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write   # opt-in: enables the sticky PR comment.
-                         # Omit to keep just inline annotations + the run summary.
+  pull-requests:
+    write # opt-in: enables the sticky PR comment.
+    # Omit to keep just inline annotations + the run summary.
 
 jobs:
   skill-check:
@@ -81,23 +73,23 @@ jobs:
 
 Three layers of feedback, all driven by the validator's existing per-violation output:
 
-| Surface                          | Permission needed       | What appears                                                |
-| -------------------------------- | ----------------------- | ----------------------------------------------------------- |
-| Inline annotations (Files diff)  | none (always-on)        | red squiggle on each `path:line` the validator flagged      |
-| Run summary (Checks tab)         | none (always-on)        | markdown table of every violation + `N verified, M skipped` |
-| Sticky PR comment                | `pull-requests: write`  | same markdown table, updated in place on each push          |
+| Surface                         | Permission needed      | What appears                                                |
+| ------------------------------- | ---------------------- | ----------------------------------------------------------- |
+| Inline annotations (Files diff) | none (always-on)       | red squiggle on each `path:line` the validator flagged      |
+| Run summary (Checks tab)        | none (always-on)       | markdown table of every violation + `N verified, M skipped` |
+| Sticky PR comment               | `pull-requests: write` | same markdown table, updated in place on each push          |
 
 Annotations and step summary are processed by the runner itself — no token, no API call, no opt-in. The PR-comment step uses the consumer's default `GITHUB_TOKEN` and runs only on `pull_request` events; without `pull-requests: write` it no-ops via `continue-on-error: true` rather than failing the run.
 
 ### Action inputs
 
-| Input               | Default                  | Description                                                  |
-| ------------------- | ------------------------ | ------------------------------------------------------------ |
-| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix             |
-| `workers-glob`      | `*/iii.worker.yaml`      | Glob of worker manifests to verify                           |
-| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                      |
-| `vale-version`      | `3.14.1`                 | Pinned Vale version                                          |
-| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset      |
+| Input               | Default                  | Description                                             |
+| ------------------- | ------------------------ | ------------------------------------------------------- |
+| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix        |
+| `workers-glob`      | `*/iii.worker.yaml`      | Glob of worker manifests to verify                      |
+| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                 |
+| `vale-version`      | `3.14.1`                 | Pinned Vale version                                     |
+| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset |
 
 ---
 
