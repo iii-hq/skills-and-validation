@@ -58,6 +58,14 @@ channels → iii-worker-manager). Other surfaces that meet this bar:
 When in doubt, prefer a callout over importing the content. The Worker Docs is the canonical
 home; iii docs is the signpost layer.
 
+## Worker Docs leaves are for additional topics, not specific functions
+
+A leaf under `docs/leaves/` in a worker's docs source covers a topical concern (e.g., "Sizing text
+before provider calls"), not a per-function reference page. Function-level reference belongs in the
+Worker Docs proper, not as a leaf. See
+[`content/skills/iii-skill-authoring/structure.md`](../skills/iii-skill-authoring/structure.md) for
+the full slot layout.
+
 ## `iii-http` and `iii-http-functions` are separate workers
 
 Both exist in the engine and both are Worker Docs targets:
