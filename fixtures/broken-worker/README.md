@@ -37,3 +37,7 @@ broken-worker --manifest | jq
 # Fixture config — intentionally minimal.
 key: value
 ```
+
+## Additional Resources
+
+- [example](skills/example.md)

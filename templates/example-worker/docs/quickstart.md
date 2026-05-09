@@ -4,9 +4,9 @@ use serde_json::json;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let worker = register_worker("ws://localhost:49134", InitOptions::default());
+    let iii = register_worker("ws://localhost:49134", InitOptions::default());
 
-    let result = worker
+    let result = iii
         .trigger(TriggerRequest {
             function_id: "textstats::analyze".into(),
             payload: json!({ "text": "hello world\nlooks small" }),
@@ -18,6 +18,32 @@ async fn main() -> anyhow::Result<()> {
     println!("{result:#?}");
     Ok(())
 }
+```
+
+```typescript
+import { registerWorker } from 'iii-sdk'
+
+const iii = registerWorker('ws://localhost:49134')
+
+const result = await iii.trigger({
+  function_id: 'textstats::analyze',
+  payload: { text: 'hello world\nlooks small' },
+})
+
+console.log(result)
+```
+
+```python
+from iii import register_worker
+
+iii = register_worker("ws://localhost:49134")
+
+result = iii.trigger({
+    "function_id": "textstats::analyze",
+    "payload": {"text": "hello world\nlooks small"},
+})
+
+print(result)
 ```
 
 The example calls `textstats::analyze`. Other entry points: `textstats::diff` and `textstats::summarize`.

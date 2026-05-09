@@ -13,3 +13,9 @@ iii worker add skills
 ```
 
 Always evaluate if companion workers are needed. If they are then first check iii for their existence. If they do not then ask the user if they would like to iii worker add them.
+
+## Additional Resources
+
+- [Sizing text before provider calls](skills/analyze.md)
+- [Comparing two text drafts](skills/diff.md)
+- [Reading rolling text-stat summaries](skills/summarize.md)
