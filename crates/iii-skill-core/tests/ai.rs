@@ -192,3 +192,33 @@ That is all there is to it!
         "expected FAIL for an obviously-fluffy README; see printed response above"
     );
 }
+
+/// Live API: the on-disk broken-worker fixture must FAIL the AI layer too.
+/// Pairs with the structure + vale tests in tests/broken_fixture.rs to
+/// confirm the broken fixture trips every layer end-to-end.
+#[test]
+fn ai_check_fails_broken_fixture_when_key_present() {
+    if std::env::var("ANTHROPIC_API_KEY").is_err() {
+        eprintln!("skipping ai_check_fails_broken_fixture: ANTHROPIC_API_KEY not set");
+        return;
+    }
+
+    let readme = repo_root()
+        .join("fixtures/broken-worker")
+        .join("README.md");
+    let result = iii_skill_core::ai::check_artifact(
+        &readme,
+        &load_rules(),
+        &load_prompt(),
+        "claude-opus-4-7",
+        "ANTHROPIC_API_KEY",
+        4000,
+    )
+    .expect("API call should not error");
+
+    print_ai_response("fails_broken_fixture", &result);
+    assert!(
+        result.is_err(),
+        "expected FAIL for the broken-worker README; see printed response above"
+    );
+}
