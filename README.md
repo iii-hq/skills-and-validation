@@ -133,7 +133,7 @@ See `templates/.skill-check.yaml` for an example file.
 
 | Field                      | Required | Purpose                                                                                                                                                 |
 | -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`                  | yes      | Pinned release tag (without the `v` prefix). The downloader fetches the matching tarball; the action picks up the same value.                           |
+| `version`                  | yes      | Schema version of `.skill-check.yaml` itself (integer). Bumped when the file format changes; current is `1`. Unrelated to the `skills-and-validation` release pin (that lives in your workflow's `uses:` ref or the action's `version:` input). |
 | `ai_check.provider`        | yes      | LLM provider for the AI layer. Currently only `anthropic` is supported.                                                                                 |
 | `ai_check.model`           | yes      | Anthropic model id (e.g. `claude-opus-4-7`).                                                                                                            |
 | `ai_check.api_key_env_var` | yes      | Name of the env var carrying the API key. The validator, the composite action, `scripts/verify.sh`, and `scripts/test-e2e.sh` all read this same field. |
@@ -141,7 +141,7 @@ See `templates/.skill-check.yaml` for an example file.
 | `rules.path`               | no       | Local override for `project-rules/`. Omit to use the rules bundled with the released validator.                                                         |
 | `styles.path`              | no       | Local override for the Vale `styles/` dir. Omit to use the bundled styles.                                                                              |
 
-Bump `version` whenever you want a newer release of the validator; everything else is wiring you usually leave alone.
+Pin the release in your workflow file via `uses: iii-hq/skills-and-validation@v0.1` (floats to the latest 0.1.x patch) or `@v0.1.5` (exact). Bump `version` only when the schema itself changes — most consumers leave it alone.
 
 ---
 

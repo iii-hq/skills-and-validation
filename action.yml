@@ -5,9 +5,12 @@ author: iii-hq
 inputs:
   version:
     description: |
-      Pinned validator version (without the "v" prefix, e.g. 0.1.0).
-      Defaults to the version field in the consumer's .skill-check.yaml.
+      Pinned validator release to download (e.g. "0.1.5", "0.1", or
+      "latest"). Defaults to "latest" — track the most recent stable
+      release. Pin via this input or via the `uses:`-line ref
+      (`@v0.1.5`) when you want reproducibility.
     required: false
+    default: "latest"
   workers-glob:
     description: Glob of worker manifests to verify (relative to GITHUB_WORKSPACE)
     default: "*/iii.worker.yaml"
@@ -35,18 +38,11 @@ runs:
       id: ver
       shell: bash
       run: |
+        # Release pin lives in the workflow's `uses:` ref (e.g. @v0.1) or in
+        # the action's `version` input. The schema-version field inside
+        # .skill-check.yaml is unrelated and not consulted here.
         v="${{ inputs.version }}"
-        if [ -z "$v" ]; then
-          if [ ! -f .skill-check.yaml ]; then
-            echo "ERROR: 'version' input not given and .skill-check.yaml not found at workspace root" >&2
-            exit 1
-          fi
-          v="$(awk '/^version:/{print $2; exit}' .skill-check.yaml)"
-        fi
-        if [ -z "$v" ]; then
-          echo "ERROR: could not resolve a version" >&2
-          exit 1
-        fi
+        [ -z "$v" ] && v="latest"
         echo "version=$v" >> "$GITHUB_OUTPUT"
 
     - name: Download iii-skill-check release

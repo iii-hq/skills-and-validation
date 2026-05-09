@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub version: Option<String>,
+    /// Schema version of the `.skill-check.yaml` itself. Bumped (e.g. 1 -> 2)
+    /// when fields are renamed or the shape changes, so consumers and the
+    /// validator can align on which surface is current. Required and integer.
+    pub version: u32,
     pub rules: Option<PathSource>,
     pub styles: Option<PathSource>,
     pub ai_check: AiCheck,
