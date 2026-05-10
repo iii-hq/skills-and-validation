@@ -333,6 +333,35 @@ The follow-up commit doesn't trigger another workflow run (GitHub's default `GIT
 
 Forks: write mode only works on PRs opened from the same repository; the consumer's `GITHUB_TOKEN` can't push to a fork. Validation-only mode (`write: false`, the default) works for both. In read-only mode, drift between `docs/` and rendered artifacts is reported as a workflow failure so the consumer knows to re-render locally and push.
 
+#### When the bot auto-commits while you're working
+
+If you push a source change and the bot's `chore: auto-render skill artifacts` commit lands before your next push, your local branch is one commit behind. Plain `git pull --rebase` works as long as your local commits didn't touch the rendered artifacts (`README.md`, `skill.md`, `skills/*.md`, or `*.skill.md`). When they did — typically because you ran the renderer locally before committing — rebase will conflict on those files.
+
+The safe one-liner is to rebase preferring the upstream side, since the bot's render is authoritative (it ran on the head commit's sources):
+
+```bash
+git fetch origin
+git rebase -X ours origin/<branch>
+```
+
+`-X ours` during a rebase resolves conflicts in favour of the side being rebased *onto* (the bot's commit), which is the opposite of the same flag during a merge. If you'd rather not memorise that, the equivalent merge form is:
+
+```bash
+git pull --no-rebase -X theirs
+```
+
+Either way, double-check the result with `git diff @{u}..` before pushing — `-X ours`/`-X theirs` is path-blind, so any conflicts in *non*-artifact files would also be silently resolved that way.
+
+If you'd rather re-render than trust the bot's commit:
+
+```bash
+git pull --rebase
+iii-skill-render <target> --write
+git add <rendered paths>
+git commit --amend --no-edit
+git push --force-with-lease
+```
+
 ---
 
 ## Local end-to-end check
