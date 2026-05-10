@@ -13,7 +13,7 @@ Some context belongs in the skill (visible to AI agents) but not in the publishe
 ```mdx
 ## Configuration
 
-Configure the engine via `~/.iii/config.yaml`.
+Configure the engine via its `config.yaml`.
 
 <!-- llm-only:start -->
 The schema is documented in `crates/iii-engine-config/src/schema.rs`. Field defaults are computed from the `Default` impl in that file — when inlining the defaults into a doc, read them from the source rather than guessing.
@@ -27,10 +27,10 @@ The published page shows just the prose. The skill artifact contains the prose p
 ## Inline form
 
 ```mdx
-The CLI reads `$XDG_CONFIG_HOME/iii/config.yaml` <!-- llm-only: which is `~/.config/iii/config.yaml` on Linux and `~/Library/Application Support/iii/config.yaml` on macOS --> when one of the search paths is set.
+The engine reads `config.yaml` from the cwd <!-- llm-only: when generating a script that starts iii in a different directory, pass `--config /path/to/config.yaml` explicitly rather than relying on the working directory. --> on startup.
 ```
 
-The published page shows the surrounding prose plus the comment (which Mintlify hides). The skill artifact reads `… config.yaml which is ~/.config/… on Linux and …`.
+The published page shows the surrounding prose plus the comment (which Mintlify hides). The skill artifact reads `… config.yaml from the cwd when generating a script … on startup.`.
 
 Use the inline form when the AI-only content is one short clause; use the block form for multi-line additions.
 

@@ -17,7 +17,15 @@ iii-skill-check verify <docs-root> --layers ai        # AI only
 iii-skill-check verify-rendered <docs-root>           # drift check vs siblings
 ```
 
-The binary walks up from `<docs-root>` to the nearest `.skill-check.yaml`, reads `mode: docs`, and dispatches.
+The binary walks up from `<docs-root>` to the nearest `.skill-check.yaml`, reads `mode: docs`, and dispatches. Pass a single `.md` / `.mdx` file to verify just that one doc — useful for fast iteration during authoring.
+
+For files that don't carry frontmatter — project READMEs, CHANGELOGs, contributor guides — use `check-file` and pass the type explicitly:
+
+```bash
+iii-skill-check check-file README.md --type how-to
+```
+
+`check-file` skips the in-scope check, so the file doesn't need to match `docs.include`. Structure in this mode only checks llm-only-block balance.
 
 ## What each layer reports
 

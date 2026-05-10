@@ -4,12 +4,12 @@ Rules for configuration file naming and conventions.
 
 ## Config file names
 
-`config.yaml` is the canonical filename for runtime configuration. It appears in two places that don't conflict because they live at different paths:
+`config.yaml` is the canonical filename for runtime configuration. It appears in two distinct contexts that share a name but never share state:
 
-- **Engine config:** `~/.iii/config.yaml` — engine-wide settings (workers list, ports, telemetry).
-- **Worker runtime config:** `<worker>/config.yaml` — per-worker runtime settings, rendered verbatim into the worker README under `## Configuration`.
+- **Engine config** — `config.yaml`. The engine reads it from the cwd (the directory `iii` was started in) or from an explicit path via `iii --config /path/to/config.yaml`. The engine does not walk parent directories looking for it. Carries engine-wide settings (workers list, ports, telemetry).
+- **Worker runtime config** — `<worker>/config.yaml`. Each worker keeps its own runtime config alongside `iii.worker.yaml`. Rendered verbatim into the worker README under `## Configuration`.
 
-The engine reads its own `config.yaml`; each worker reads its own. They share neither state nor schema.
+The two never share state or schema; their location and consumer are different.
 
 The worker manifest is `iii.worker.yaml` — separate from the worker's runtime `config.yaml`. The manifest carries identity (`name`, `language`, `deploy`, `bin`); the runtime config carries values the worker reads at boot.
 

@@ -10,7 +10,7 @@ A built-in worker that ships with the iii engine. Built-in workers are tied to t
 iii worker add bad-concept-worker
 ```
 
-`iii worker add` fetches the binary, writes a config block into `~/.iii/config.yaml`, and the engine starts the worker on the next `iii worker start`.
+`iii worker add` fetches the binary, writes a config block into the engine's `config.yaml`, and the engine starts the worker on the next `iii worker start`.
 
 ## Quickstart
 

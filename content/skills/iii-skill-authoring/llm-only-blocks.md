@@ -35,4 +35,4 @@ The inline form must be on a line of its own. Embedded mid-paragraph inline llm-
 
 ## Validation
 
-`iii-skill-check structure` enforces that every `:start` marker has a matching `:end` marker in every artifact. Unbalanced blocks fail Layer 1.
+The structure layer of `iii-skill-check verify` enforces that every `:start` marker has a matching `:end` marker on its own line. Unbalanced blocks fail the layer.

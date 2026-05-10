@@ -10,6 +10,10 @@ docs:
     - "fixtures/**"
     - "templates/**"
     - "target/**"
+    # Diataxis-type skill files use skillkit's frontmatter shape
+    # (`name:` + `description:`), not the Mintlify shape docs-mode
+    # validates. Distributed via skillkit; not docs-mode artifacts.
+    - "content/skills/iii-doc-authoring/diataxis/**"
 ai_check:
   provider: anthropic
   model: claude-opus-4-7

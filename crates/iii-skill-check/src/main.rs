@@ -234,7 +234,13 @@ fn verify_worker(
 
     if layer_set.contains("ai") {
         let rules_dir = resolve_rules_dir(workers_root, &config, rules_override.as_deref())?;
-        let rules = load_project_rules(&rules_dir)?;
+        // Worker README/skill/skills/leaves are how-to per content/.vale.ini.
+        // Load the matching diataxis guide so the AI sees the same authoring
+        // rules a human author reads from iii-doc-authoring/diataxis/doc_howto.md.
+        let rules = load_project_rules(
+            &rules_dir,
+            Some(iii_skill_core::docs::frontmatter::DocType::HowTo),
+        )?;
         let prompt_path = rules_dir.join("_skill-check-prompt.md");
         let system_prompt = std::fs::read_to_string(&prompt_path)
             .with_context(|| format!("reading {}", prompt_path.display()))?;
@@ -335,12 +341,25 @@ fn verify_docs(
 
     if layer_set.contains("ai") && !typed.is_empty() {
         let rules_dir = resolve_rules_dir(root, config, rules_override.as_deref())?;
-        let rules = load_project_rules(&rules_dir)?;
         let prompt_path = rules_dir.join("_skill-check-prompt.md");
         let system_prompt = std::fs::read_to_string(&prompt_path)
             .with_context(|| format!("reading {}", prompt_path.display()))?;
+        // Cache rules by doc type so we don't re-read the diataxis guides
+        // once per artifact when many share a category.
+        let mut rules_by_type: std::collections::HashMap<
+            iii_skill_core::docs::frontmatter::DocType,
+            String,
+        > = std::collections::HashMap::new();
         for (doc, ty) in &typed {
             let skill = doc.skill_path();
+            let rules = match rules_by_type.get(ty) {
+                Some(r) => r.clone(),
+                None => {
+                    let r = load_project_rules(&rules_dir, Some(*ty))?;
+                    rules_by_type.insert(*ty, r.clone());
+                    r
+                }
+            };
             match iii_skill_core::ai::check_artifact_with_type(
                 &skill,
                 &rules,
@@ -404,7 +423,7 @@ fn verify_doc_file(
 
         if layer_set.contains("ai") && skill_path.is_file() {
             let rules_dir = resolve_rules_dir(docs_root, config, rules_override.as_deref())?;
-            let rules = load_project_rules(&rules_dir)?;
+            let rules = load_project_rules(&rules_dir, Some(doc_type))?;
             let prompt_path = rules_dir.join("_skill-check-prompt.md");
             let system_prompt = std::fs::read_to_string(&prompt_path)
                 .with_context(|| format!("reading {}", prompt_path.display()))?;
@@ -515,7 +534,7 @@ fn check_file(
 
     if layer_set.contains("ai") {
         let rules_dir = resolve_rules_dir(root, &config, rules_override.as_deref())?;
-        let rules = load_project_rules(&rules_dir)?;
+        let rules = load_project_rules(&rules_dir, Some(doc_type))?;
         let prompt_path = rules_dir.join("_skill-check-prompt.md");
         let system_prompt = std::fs::read_to_string(&prompt_path)
             .with_context(|| format!("reading {}", prompt_path.display()))?;
@@ -642,7 +661,20 @@ fn enumerate_rendered_artifacts(worker: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn load_project_rules(rules_dir: &Path) -> anyhow::Result<String> {
+/// Concatenate `content/project-rules/*.md` (the always-on rules), plus
+/// the matching diataxis-quadrant authoring guide(s) when a doc type is
+/// supplied. Worker artifacts pass `Some(DocType::HowTo)` because every
+/// rendered worker README/skill/leaf is how-to in shape; docs-mode
+/// artifacts pass the type from their frontmatter.
+///
+/// The diataxis bundle has both a global file (`doc_workflow.md`,
+/// always loaded when a type is given) and a per-quadrant file
+/// (`doc_<type>.md`). Both go into the AI prompt's user message so the
+/// model sees the same authoring rules a human writer would read.
+fn load_project_rules(
+    rules_dir: &Path,
+    doc_type: Option<iii_skill_core::docs::frontmatter::DocType>,
+) -> anyhow::Result<String> {
     let mut combined = String::new();
     let mut entries: Vec<_> = std::fs::read_dir(rules_dir)
         .with_context(|| format!("reading {}", rules_dir.display()))?
@@ -666,5 +698,33 @@ fn load_project_rules(rules_dir: &Path) -> anyhow::Result<String> {
             .with_context(|| format!("reading {}", path.display()))?;
         combined.push_str(&format!("# {name}\n\n{body}\n\n"));
     }
+    if let Some(ty) = doc_type {
+        if let Some(diataxis_dir) = locate_diataxis_dir() {
+            let workflow = diataxis_dir.join("doc_workflow.md");
+            if let Ok(body) = std::fs::read_to_string(&workflow) {
+                combined.push_str(&format!("# diataxis/doc_workflow.md\n\n{body}\n\n"));
+            }
+            let type_file = match ty {
+                iii_skill_core::docs::frontmatter::DocType::Tutorial => "doc_tutorial.md",
+                iii_skill_core::docs::frontmatter::DocType::HowTo => "doc_howto.md",
+                iii_skill_core::docs::frontmatter::DocType::Reference => "doc_reference.md",
+                iii_skill_core::docs::frontmatter::DocType::Explanation => "doc_explanation.md",
+            };
+            let type_path = diataxis_dir.join(type_file);
+            if let Ok(body) = std::fs::read_to_string(&type_path) {
+                combined.push_str(&format!("# diataxis/{type_file}\n\n{body}\n\n"));
+            }
+        }
+    }
     Ok(combined)
+}
+
+/// Locate the diataxis writing-guide directory inside the bundled
+/// content. Returns `None` (rather than erroring) so a missing diataxis
+/// bundle silently falls back to the original project-rules-only prompt
+/// — old bundles still validate, just without per-quadrant context.
+fn locate_diataxis_dir() -> Option<PathBuf> {
+    iii_skill_core::bundle::find_content_root()
+        .map(|c| c.join("skills").join("iii-doc-authoring").join("diataxis"))
+        .filter(|p| p.is_dir())
 }
