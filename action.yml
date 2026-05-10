@@ -246,8 +246,13 @@ runs:
         fi
         exit $rc
 
+    # `success() &&` is required because an explicit `if:` overrides the
+    # default `success()` gate. Without it the auto-commit step would
+    # run on verify failures too, pushing un-validated bot commits to
+    # the PR branch — which moves the PR head off the SHA the check
+    # runs are anchored to and breaks the failing-status display.
     - name: Commit and push rendered diff (write mode)
-      if: ${{ inputs.write == 'true' && github.event_name == 'pull_request' && steps.render.outputs.drift == 'present' }}
+      if: ${{ success() && inputs.write == 'true' && github.event_name == 'pull_request' && steps.render.outputs.drift == 'present' }}
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
