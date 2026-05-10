@@ -3,6 +3,12 @@
 //! `templates/example-worker/` ships only sources (no rendered README.md /
 //! skill.md / skills/*.md). Tests that need rendered output use
 //! `RenderedTemplate::lock` to render in place and clean up afterwards.
+//!
+//! `mod common;` is included into multiple test crates; only some of them
+//! exercise every helper. `#[allow(dead_code)]` keeps cargo's
+//! per-crate dead-code analysis quiet without forcing every test file to
+//! call every helper.
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock};
