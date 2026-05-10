@@ -1,3 +1,9 @@
+---
+title: "Voice"
+description: "Pointer to project-rules/voice.md plus per-Diataxis-type voice expectations."
+type: "reference"
+---
+
 # Voice
 
 The voice rules in `project-rules/voice.md` apply to every doc regardless of `type`. The Diataxis ruleset on top of them adjusts which patterns are *expected* vs flagged for a given category — `voice.md` is the always-on baseline.

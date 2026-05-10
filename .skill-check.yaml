@@ -1,0 +1,17 @@
+version: 2
+mode: docs
+docs:
+  include:
+    - "content/skills/**/*.md"
+  # Exclude vendored test fixtures and templates that have their own
+  # `.skill-check.yaml` — without this, their `<!-- skill:include-doc -->`
+  # markers would otherwise pull them into the repo-root run.
+  exclude:
+    - "fixtures/**"
+    - "templates/**"
+    - "target/**"
+ai_check:
+  provider: anthropic
+  model: claude-opus-4-7
+  api_key_env_var: ANTHROPIC_API_KEY
+  max_tokens: 6000

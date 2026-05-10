@@ -44,10 +44,10 @@ fn enumerate_picks_up_all_in_scope_docs() {
     .unwrap();
 
     let rels: Vec<&str> = docs.iter().map(|d| d.rel.as_str()).collect();
-    // CHANGELOG.md is glob-excluded but opted in → present.
-    // draft.mdx is glob-included but opted out → absent.
+    // CHANGELOG.md is path-excluded; the `skill:include-doc` marker no
+    // longer overrides path excludes, so CHANGELOG stays out.
+    // draft.mdx is glob-included but has `skill:exclude-doc` → absent.
     let expected = vec![
-        "CHANGELOG.md",
         "how-to/rotate-credentials.mdx",
         "reference/cli.md",
         "tutorials/intro.mdx",
@@ -101,8 +101,10 @@ fn check_rendered_flags_missing_skill_files() {
     )
     .expect("check_rendered runs");
     // The fixture intentionally ships sources only — every in-scope doc
-    // should be flagged as out-of-date.
-    assert_eq!(drift.len(), 4, "got: {drift:?}");
+    // should be flagged as out-of-date. Three docs in scope after the
+    // marker-precedence change (CHANGELOG.md no longer overrides the path
+    // exclude).
+    assert_eq!(drift.len(), 3, "got: {drift:?}");
     for line in &drift {
         assert!(
             line.contains("is out of date"),

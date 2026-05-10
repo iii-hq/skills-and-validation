@@ -1,3 +1,9 @@
+---
+title: "Frontmatter"
+description: "Required and optional fields for the YAML frontmatter every in-scope doc carries."
+type: "reference"
+---
+
 # Frontmatter
 
 Every in-scope doc starts with a YAML frontmatter block. Anything past the closing `---` is the body.

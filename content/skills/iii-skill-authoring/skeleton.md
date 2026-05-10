@@ -1,3 +1,9 @@
+---
+title: "Worker skeleton"
+description: "Copy-paste starter for a new worker — placeholders that turn into a working partial set after one s/<worker>/your-name/."
+type: "reference"
+---
+
 # Worker skeleton
 
 Copy-paste starter for a new worker. After cloning, every placeholder is one `s/<worker>/your-name/` away from a working partial set. Run `iii-skill-check render --write <worker>` once the placeholders are filled in.

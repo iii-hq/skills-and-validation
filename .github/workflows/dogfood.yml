@@ -47,3 +47,55 @@ jobs:
             echo "::warning::ANTHROPIC_API_KEY not set; skipping AI layer"
           fi
           ./target/release/iii-skill-check verify templates/example-worker --layers "$layers"
+
+  verify-self:
+    name: verify own bundles + README
+    runs-on: ubuntu-latest
+    env:
+      SKV_NO_UPDATE_CHECK: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dogfood
+      - name: Install Vale ${{ env.VALE_VERSION }}
+        run: |
+          curl -sL "https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin vale
+          vale --version
+      - name: Build release binaries
+        run: cargo build --release --workspace
+      # content/skills/ ships sources only — render the skill bundles in
+      # place so the verify step has artifacts to check.
+      - name: Render content/skills/
+        run: ./target/release/iii-skill-render . --write
+      - name: verify-rendered (drift check)
+        run: ./target/release/iii-skill-check verify-rendered .
+      - name: verify content/skills/ (structure + vale + ai)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            layers="structure,vale,ai"
+          else
+            layers="structure,vale"
+            echo "::warning::ANTHROPIC_API_KEY not set; skipping AI layer"
+          fi
+          ./target/release/iii-skill-check verify . --layers "$layers"
+      # README.md is GitHub-rendered, no frontmatter; check-file applies
+      # the how-to ruleset directly. The .skill-check.yaml at the repo
+      # root supplies ai_check settings.
+      - name: check-file README.md (how-to)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            layers="structure,vale,ai"
+          else
+            layers="structure,vale"
+            echo "::warning::ANTHROPIC_API_KEY not set; skipping AI layer"
+          fi
+          ./target/release/iii-skill-check check-file README.md \
+            --type how-to \
+            --layers "$layers"

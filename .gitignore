@@ -1,2 +1,8 @@
 target/
 .env
+
+# Rendered skill artifacts: docs-mode emits these next to each source.
+# We don't ship them in our content bundles — consumers regenerate via
+# `iii-skill-render`. Dogfood CI renders them in the workspace, verifies,
+# and discards.
+*.skill.md

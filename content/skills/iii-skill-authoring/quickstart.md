@@ -1,3 +1,9 @@
+---
+title: "Authoring a worker Quickstart"
+description: "Author the ## Quickstart section that takes a reader from a running worker to a first useful call in one fenced block."
+type: "how-to"
+---
+
 # Authoring a worker Quickstart
 
 The `## Quickstart` section is the meat of a worker README. It moves the reader from `the worker is running` to `I made a first useful call` in a single fenced code block.

@@ -166,10 +166,16 @@ fn render_docs_root(
 
     if write {
         // Orphan cleanup: remove any *.skill.md whose source is gone or out
-        // of scope. Mirrors worker mode's stale-leaf cleanup.
+        // of scope, scoped to the in-scope source's parent dirs only so
+        // we don't reach into excluded subtrees (vendored fixtures with
+        // their own configs, sibling projects, etc.).
         let in_scope_skills: std::collections::HashSet<PathBuf> =
             docs.iter().map(|d| d.skill_path()).collect();
-        cleanup_orphan_skills(root, &in_scope_skills)?;
+        let scan_dirs: std::collections::HashSet<PathBuf> = docs
+            .iter()
+            .filter_map(|d| d.abs.parent().map(Path::to_path_buf))
+            .collect();
+        cleanup_orphan_skills(&scan_dirs, &in_scope_skills)?;
         println!("wrote skill artifacts under {}", root.display());
     }
 
@@ -198,26 +204,35 @@ fn render_single_doc(path: &Path, write: bool) -> Result<()> {
     Ok(())
 }
 
+/// Remove `*.skill.md` files in `scan_dirs` that aren't in `expected`.
+/// Only the listed dirs are scanned (non-recursively) so excluded
+/// subtrees stay untouched even if the controlling docs root is the
+/// repo root.
 fn cleanup_orphan_skills(
-    root: &Path,
+    scan_dirs: &std::collections::HashSet<PathBuf>,
     expected: &std::collections::HashSet<PathBuf>,
 ) -> Result<()> {
-    for entry in walkdir::WalkDir::new(root) {
-        let entry = entry.context("scanning for orphan skill artifacts")?;
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let path = entry.path();
-        let is_skill = path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .map_or(false, |n| n.ends_with(".skill.md"));
-        if !is_skill {
-            continue;
-        }
-        if !expected.contains(path) {
-            std::fs::remove_file(path)?;
-            println!("removed stale {}", path.display());
+    for dir in scan_dirs {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let is_skill = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map_or(false, |n| n.ends_with(".skill.md"));
+            if !is_skill {
+                continue;
+            }
+            if !expected.contains(&path) {
+                std::fs::remove_file(&path)?;
+                println!("removed stale {}", path.display());
+            }
         }
     }
     Ok(())

@@ -1,3 +1,9 @@
+---
+title: "Run iii-skill-check"
+description: "Run iii-skill-check verify locally to see what passes, what fails, and which layer flagged each finding."
+type: "how-to"
+---
+
 # check
 
 Run `iii-skill-check verify` against the docs root to see what passes, what fails, and where.

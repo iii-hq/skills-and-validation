@@ -1,3 +1,9 @@
+---
+title: "ideal-docs/project-rules is canonical"
+description: "Why the rules under workers/project-rules/ are a vendored snapshot of iii-hq/ideal-docs/project-rules/."
+type: "explanation"
+---
+
 # `ideal-docs/project-rules` is canonical
 
 The rules `iii-skill-check` enforces live under `workers/project-rules/` (vendored snapshot) and `workers/styles/` (vendored Vale styles). The canonical source for both is `iii-hq/ideal-docs/project-rules/` and `iii-hq/ideal-docs/styles/`.

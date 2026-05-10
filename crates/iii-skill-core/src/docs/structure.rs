@@ -46,8 +46,11 @@ pub fn check_source(path: &Path) -> Vec<Violation> {
 }
 
 fn check_llm_only_balance(file: &str, content: &str) -> Vec<Violation> {
-    let starts = content.matches("<!-- llm-only:start -->").count();
-    let ends = content.matches("<!-- llm-only:end -->").count();
+    // Line-exact match so an inline backtick example
+    // (`<!-- llm-only:start -->`) inside prose doesn't count as a real
+    // marker.
+    let starts = count_line_exact(content, "<!-- llm-only:start -->");
+    let ends = count_line_exact(content, "<!-- llm-only:end -->");
     if starts == ends {
         return Vec::new();
     }
@@ -61,8 +64,8 @@ fn check_llm_only_balance(file: &str, content: &str) -> Vec<Violation> {
 }
 
 fn check_conflicting_doc_scope(file: &str, content: &str) -> Vec<Violation> {
-    let has_include = content.contains("<!-- skill:include-doc -->");
-    let has_exclude = content.contains("<!-- skill:exclude-doc -->");
+    let has_include = count_line_exact(content, "<!-- skill:include-doc -->") > 0;
+    let has_exclude = count_line_exact(content, "<!-- skill:exclude-doc -->") > 0;
     if has_include && has_exclude {
         return vec![Violation {
             file: file.to_string(),
@@ -73,6 +76,10 @@ fn check_conflicting_doc_scope(file: &str, content: &str) -> Vec<Violation> {
         }];
     }
     Vec::new()
+}
+
+fn count_line_exact(content: &str, marker: &str) -> usize {
+    content.lines().filter(|l| l.trim() == marker).count()
 }
 
 #[cfg(test)]

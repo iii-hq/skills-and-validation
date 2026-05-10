@@ -8,7 +8,7 @@ type: "reference"
 
 # Changelog
 
-Release notes from oldest to newest. The `<!-- skill:include-doc -->` marker keeps this in the skill set even though `docs.exclude` would otherwise drop it.
+Release notes. The `<!-- skill:include-doc -->` marker is here for the test fixture — it does NOT override `docs.exclude`, so this file stays out of scope. Path-based excludes are a hard signal.
 
 ## 0.1.0
 

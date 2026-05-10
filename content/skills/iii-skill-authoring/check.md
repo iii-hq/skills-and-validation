@@ -1,3 +1,9 @@
+---
+title: "Run iii-skill-check"
+description: "Run iii-skill-check verify locally during authoring; the same binary CI uses on every PR."
+type: "how-to"
+---
+
 # Running iii-skill-check locally
 
 `iii-skill-check` is the validator that renders, lints, and AI-reviews worker artifacts. It runs on every PR via GitHub Actions and on every commit via the pre-commit hook, but it can also run directly during authoring.

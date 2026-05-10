@@ -1,3 +1,9 @@
+---
+title: "llm-only comment blocks"
+description: "Use llm-only block markers to land one source on two render targets — visible in skill, hidden from README."
+type: "how-to"
+---
+
 # llm-only comment blocks
 
 A `<!-- llm-only:start --> ... <!-- llm-only:end -->` block lets one source file produce two render targets:

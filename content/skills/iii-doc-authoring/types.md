@@ -1,3 +1,9 @@
+---
+title: "Diataxis types"
+description: "Reference for the four Diataxis categories the type field selects, with the rule sets each one enables."
+type: "reference"
+---
+
 # Diataxis types
 
 `type:` in your frontmatter selects a Diataxis category. Each category enables one rule set in `Diataxis.*` and disables the others, plus the cross-contamination check that flags content drifting toward the wrong category.

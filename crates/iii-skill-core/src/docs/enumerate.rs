@@ -102,11 +102,20 @@ pub fn is_in_scope(path: &Path, root: &Path, config: &DocsConfig) -> anyhow::Res
 }
 
 fn decide(rel: &str, abs: &Path, includes: &[Pattern], excludes: &[Pattern]) -> bool {
+    // Path-based excludes are always hard — they describe trees the
+    // controlling config considers off-limits (vendored fixtures,
+    // unrelated subprojects, etc.). Even a per-file
+    // `<!-- skill:include-doc -->` doesn't pull a path-excluded file back
+    // in; the marker is a "include even if the include list missed me"
+    // override, not an exclude bypass.
+    if matches_any(excludes, rel) {
+        return false;
+    }
     let scope = peek_doc_scope(abs).unwrap_or(None);
     match scope {
         Some(DocScope::Include) => true,
         Some(DocScope::Exclude) => false,
-        None => matches_any(includes, rel) && !matches_any(excludes, rel),
+        None => matches_any(includes, rel),
     }
 }
 
@@ -184,18 +193,46 @@ mod tests {
     }
 
     #[test]
-    fn doc_marker_overrides_glob_exclude() {
+    fn path_exclude_beats_include_doc_marker() {
+        // Path-based excludes are a hard signal — even
+        // `<!-- skill:include-doc -->` doesn't pull a path-excluded file
+        // back in. The marker only overrides the include list.
         let tmp = TempDir::new().unwrap();
         write(
             tmp.path(),
-            "guides/CHANGELOG.md",
+            "vendored/CHANGELOG.md",
             &format!("{}\n\n<!-- skill:include-doc -->\n", fm()),
         );
-
-        let cfg = cfg(&["**/*.md"], &["**/CHANGELOG.md"]);
+        let cfg = cfg(&["**/*.md"], &["vendored/**"]);
         let docs = enumerate(tmp.path(), &cfg).unwrap();
-        assert_eq!(docs.len(), 1);
-        assert_eq!(docs[0].rel, "guides/CHANGELOG.md");
+        assert!(docs.is_empty(), "path exclude should win, got: {docs:?}");
+    }
+
+    #[test]
+    fn include_doc_marker_overrides_glob_miss() {
+        // The include-doc marker still pulls in files the include list
+        // missed, as long as no path exclude blocks them.
+        let tmp = TempDir::new().unwrap();
+        write(
+            tmp.path(),
+            "guides/orphan.notes",
+            &format!("{}\n\n<!-- skill:include-doc -->\n", fm()),
+        );
+        // Even with no include match (filename has wrong extension), the
+        // marker does NOT pull this in — extension filter still applies.
+        let cfg = cfg(&["**/*.md"], &[]);
+        let docs = enumerate(tmp.path(), &cfg).unwrap();
+        assert!(docs.is_empty());
+
+        // But the .md case works.
+        write(
+            tmp.path(),
+            "guides/orphan.md",
+            &format!("{}\n\n<!-- skill:include-doc -->\n", fm()),
+        );
+        let docs = enumerate(tmp.path(), &cfg).unwrap();
+        let rels: Vec<_> = docs.iter().map(|d| d.rel.as_str()).collect();
+        assert_eq!(rels, vec!["guides/orphan.md"]);
     }
 
     #[test]
@@ -248,16 +285,17 @@ mod tests {
     }
 
     #[test]
-    fn is_in_scope_honours_marker_override() {
+    fn is_in_scope_path_exclude_beats_marker() {
+        // Mirrors path_exclude_beats_include_doc_marker but via the per-
+        // file is_in_scope helper.
         let tmp = TempDir::new().unwrap();
         write(
             tmp.path(),
-            "guides/CHANGELOG.md",
+            "vendored/CHANGELOG.md",
             &format!("{}\n<!-- skill:include-doc -->\n", fm()),
         );
-        let cfg = cfg(&["**/*.md"], &["**/CHANGELOG.md"]);
-        // Glob would exclude, but the marker forces it in.
-        assert!(is_in_scope(&tmp.path().join("guides/CHANGELOG.md"), tmp.path(), &cfg).unwrap());
+        let cfg = cfg(&["**/*.md"], &["vendored/**"]);
+        assert!(!is_in_scope(&tmp.path().join("vendored/CHANGELOG.md"), tmp.path(), &cfg).unwrap());
     }
 
     #[test]

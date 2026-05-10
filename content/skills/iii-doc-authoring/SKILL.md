@@ -1,3 +1,9 @@
+---
+title: "iii-doc-authoring"
+description: "Skill bundle index for authoring Mintlify-shaped docs that iii-skill-check validates."
+type: "reference"
+---
+
 # iii-doc-authoring
 
 How to write Mintlify-shaped `.md` / `.mdx` docs that `iii-skill-check` validates and renders into per-doc skill artifacts (`<source>.skill.md` siblings).

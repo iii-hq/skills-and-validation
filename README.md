@@ -206,7 +206,7 @@ Markers (`<!-- skill:... -->` HTML comments) override the globs at the doc level
 
 | Marker                                        | Scope     | Effect                                                                                                            |
 | --------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
-| `<!-- skill:include-doc -->`                  | doc       | Forces this doc into the skill set (overrides `docs.exclude`).                                                    |
+| `<!-- skill:include-doc -->`                  | doc       | Pulls this doc in when `docs.include` missed it. `docs.exclude` still wins.                                       |
 | `<!-- skill:exclude-doc -->`                  | doc       | Drops this doc from the skill set (overrides `docs.include`).                                                     |
 | `<!-- skill:include-sections-by-default -->`  | file      | Default if absent. Every section is in the skill unless excluded.                                                 |
 | `<!-- skill:exclude-sections-by-default -->`  | file      | No section is in the skill unless explicitly included.                                                            |
@@ -215,7 +215,7 @@ Markers (`<!-- skill:... -->` HTML comments) override the globs at the doc level
 
 Section markers can sit on the heading line (`## Internals <!-- skill:exclude-section -->`) or on their own line within the section. The renderer drops every recognised marker line from the rendered output; heading text stays.
 
-The full authoring guide lives in `content/skills/iii-doc-authoring/`. Browse via `skillkit read iii-doc-authoring/<topic>` after installing the bundle.
+The full authoring guide is in `content/skills/iii-doc-authoring/`. Browse via `skillkit read iii-doc-authoring/<topic>` after installing the bundle.
 
 ---
 

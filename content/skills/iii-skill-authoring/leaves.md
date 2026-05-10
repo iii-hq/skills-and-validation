@@ -1,3 +1,9 @@
+---
+title: "Authoring per-function skill leaves"
+description: "Reference for the docs/leaves/<leaf>.md file each registered worker function carries."
+type: "reference"
+---
+
 # Authoring per-function skill leaves
 
 Each registered function gets one file at `docs/leaves/<leaf>.md`. The leaf name is the function id's suffix after the last `::` — `textstats::analyze` corresponds to `docs/leaves/analyze.md`, `auth::list_providers` to `docs/leaves/list_providers.md`.

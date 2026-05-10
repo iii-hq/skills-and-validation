@@ -1,3 +1,9 @@
+---
+title: "llm-only blocks"
+description: "Wrap context for AI agents that should not appear in the human-facing rendered doc."
+type: "how-to"
+---
+
 # llm-only blocks
 
 Some context belongs in the skill (visible to AI agents) but not in the published doc (visible to humans). Wrap that content in `<!-- llm-only:start -->` / `<!-- llm-only:end -->` markers. The Mintlify renderer ignores HTML comments; `iii-skill-render` strips the markers but keeps the inner content when it writes the `<source>.skill.md` artifact.

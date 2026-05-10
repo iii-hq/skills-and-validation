@@ -120,8 +120,17 @@ fn check_forbidden_install_patterns(readme: &str, name: &str) -> Vec<Violation> 
 }
 
 fn check_llm_only_balance(label: &str, content: &str) -> Vec<Violation> {
-    let starts = content.matches("<!-- llm-only:start -->").count();
-    let ends = content.matches("<!-- llm-only:end -->").count();
+    // Line-exact match so an inline backtick example
+    // (`<!-- llm-only:start -->`) inside prose doesn't count as a real
+    // marker.
+    let starts = content
+        .lines()
+        .filter(|l| l.trim() == "<!-- llm-only:start -->")
+        .count();
+    let ends = content
+        .lines()
+        .filter(|l| l.trim() == "<!-- llm-only:end -->")
+        .count();
     if starts == ends {
         return Vec::new();
     }

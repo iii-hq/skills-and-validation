@@ -1,3 +1,9 @@
+---
+title: "Markers"
+description: "Reference for the skill: HTML-comment markers that override doc-level scope and filter sections."
+type: "reference"
+---
+
 # Markers
 
 `<!-- skill:... -->` HTML comments override the include/exclude globs in `.skill-check.yaml` (doc-level) or filter what makes it into the rendered skill (section-level).
@@ -6,11 +12,18 @@
 
 `<!-- skill:include-doc -->`
 
-Forces this doc into the skill set, even if `.skill-check.yaml` excluded it. Useful when a global `exclude` rule swept up a doc that should still be a skill.
+Pulls this doc into the skill set when the `docs.include` list missed it. Useful for one-off docs in a directory the include patterns don't cover. **Path-based excludes still win** — if `docs.exclude` matches the path, this marker has no effect.
 
 `<!-- skill:exclude-doc -->`
 
-Drops this doc from the skill set, even if `.skill-check.yaml` matched it. Useful for drafts, experimental pages, or pages that aren't ready for AI consumption.
+Drops this doc from the skill set even if it matched the include list. Useful for drafts, experimental pages, or pages that aren't ready for AI consumption.
+
+Precedence:
+
+1. `docs.exclude` (path-based) — hard out, beats everything else.
+2. `<!-- skill:exclude-doc -->` — beats include-doc + the include list.
+3. `<!-- skill:include-doc -->` — beats an include-list miss.
+4. `docs.include` — default in/out signal.
 
 Either marker can appear anywhere in the file but conventionally lives near the top. If both appear in the same file the structure layer flags it — pick one.
 

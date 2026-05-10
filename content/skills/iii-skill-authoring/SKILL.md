@@ -1,3 +1,9 @@
+---
+title: "iii-skill-authoring"
+description: "Skill bundle index for authoring the partials iii-skill-check renders into worker README, skill, and skills/leaves."
+type: "reference"
+---
+
 # iii-skill-authoring
 
 How to write the partials that `iii-skill-check` renders into the README, top-level skill body, and per-function skill leaves of an iii worker.

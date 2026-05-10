@@ -38,6 +38,49 @@ enum Command {
     },
     /// Re-render and diff against checked-in artifacts; non-zero on drift.
     VerifyRendered { target: PathBuf },
+    /// Validate a single file with an explicit doc type.
+    ///
+    /// Useful for files that don't carry frontmatter (project READMEs,
+    /// CHANGELOGs, contributor guides) but still need to follow the same
+    /// voice and Diataxis rules. The binary walks up to the nearest
+    /// `.skill-check.yaml` for `ai_check` settings; the in-scope check
+    /// from docs mode does NOT apply — `check-file` is explicit by design.
+    CheckFile {
+        /// Path to the file to validate (`.md` / `.mdx`).
+        target: PathBuf,
+        /// Diataxis type the file should be validated as.
+        #[arg(long, value_enum)]
+        r#type: DocTypeArg,
+        /// Subset of layers to run: structure,vale,ai (comma-separated).
+        /// `structure` here only checks llm-only-block balance — there's
+        /// no frontmatter to validate.
+        #[arg(long, default_value = "structure,vale,ai")]
+        layers: String,
+        /// Override the project-rules directory. Resolution order:
+        /// this flag, then `.skill-check.yaml` `rules.path`, then bundled rules.
+        #[arg(long)]
+        rules_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum DocTypeArg {
+    Tutorial,
+    HowTo,
+    Reference,
+    Explanation,
+}
+
+impl From<DocTypeArg> for iii_skill_core::docs::frontmatter::DocType {
+    fn from(v: DocTypeArg) -> Self {
+        use iii_skill_core::docs::frontmatter::DocType;
+        match v {
+            DocTypeArg::Tutorial => DocType::Tutorial,
+            DocTypeArg::HowTo => DocType::HowTo,
+            DocTypeArg::Reference => DocType::Reference,
+            DocTypeArg::Explanation => DocType::Explanation,
+        }
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -51,6 +94,12 @@ fn main() -> anyhow::Result<()> {
             vale_config,
         } => dispatch_verify(&target, &layers, rules_dir, vale_config),
         Command::VerifyRendered { target } => dispatch_verify_rendered(&target),
+        Command::CheckFile {
+            target,
+            r#type,
+            layers,
+            rules_dir,
+        } => check_file(&target, r#type.into(), &layers, rules_dir),
     }
 }
 
@@ -415,6 +464,76 @@ fn verify_rendered_docs(
     }
     println!("docs skill artifacts match sources in {}", root.display());
     Ok(())
+}
+
+// --- check-file ------------------------------------------------------------
+
+fn check_file(
+    target: &Path,
+    doc_type: iii_skill_core::docs::frontmatter::DocType,
+    layers: &str,
+    rules_override: Option<PathBuf>,
+) -> anyhow::Result<()> {
+    if !target.is_file() {
+        anyhow::bail!("check-file target is not a file: {}", target.display());
+    }
+    let (config_path, config) = load_controlling_config(target)?;
+    let root = config_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("`.skill-check.yaml` has no parent dir"))?;
+
+    let layer_set: HashSet<&str> = layers.split(',').map(|s| s.trim()).collect();
+    let mut all_violations: Vec<iii_skill_core::structure::Violation> = Vec::new();
+    let mut ai_failures: Vec<(PathBuf, String)> = Vec::new();
+
+    if layer_set.contains("structure") {
+        // Without frontmatter the only meaningful structure check is
+        // llm-only-block balance.
+        let body = std::fs::read_to_string(target)
+            .with_context(|| format!("reading {}", target.display()))?;
+        let starts = body.matches("<!-- llm-only:start -->").count();
+        let ends = body.matches("<!-- llm-only:end -->").count();
+        if starts != ends {
+            all_violations.push(iii_skill_core::structure::Violation {
+                file: target.display().to_string(),
+                line: None,
+                message: format!(
+                    "unbalanced llm-only blocks: {starts} start markers, {ends} end markers"
+                ),
+            });
+        }
+    }
+
+    if layer_set.contains("vale") {
+        let styles_path = resolve_styles_path()?;
+        let cfg = iii_skill_core::docs::vale_config::build(&[(target, doc_type)], &styles_path);
+        let tmp = tempfile::TempDir::new().context("creating temp dir for vale config")?;
+        let cfg_path = tmp.path().join(".vale.ini");
+        std::fs::write(&cfg_path, cfg).context("writing runtime vale config")?;
+        all_violations.extend(iii_skill_core::vale::run(&[target], &cfg_path)?);
+    }
+
+    if layer_set.contains("ai") {
+        let rules_dir = resolve_rules_dir(root, &config, rules_override.as_deref())?;
+        let rules = load_project_rules(&rules_dir)?;
+        let prompt_path = rules_dir.join("_skill-check-prompt.md");
+        let system_prompt = std::fs::read_to_string(&prompt_path)
+            .with_context(|| format!("reading {}", prompt_path.display()))?;
+        match iii_skill_core::ai::check_artifact_with_type(
+            target,
+            &rules,
+            &system_prompt,
+            doc_type,
+            &config.ai_check.model,
+            &config.ai_check.api_key_env_var,
+            config.ai_check.max_tokens,
+        )? {
+            Ok(()) => {}
+            Err(body) => ai_failures.push((target.to_path_buf(), body)),
+        }
+    }
+
+    report(&all_violations, &ai_failures, layers, &target.display().to_string())
 }
 
 // --- shared helpers --------------------------------------------------------

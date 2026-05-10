@@ -1,3 +1,9 @@
+---
+title: "Quickstart"
+description: "Get from a Mintlify docs site to a validated skill set."
+type: "how-to"
+---
+
 # Quickstart
 
 Get from a Mintlify docs site to a validated skill set.

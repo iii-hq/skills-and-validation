@@ -1,3 +1,9 @@
+---
+title: "Worker docs source layout"
+description: "Reference for the docs/ partials a worker keeps and how each one feeds the rendered README, skill, and skills/leaves."
+type: "reference"
+---
+
 # Worker docs source layout
 
 A worker that uses `iii-skill-check` keeps narrative source under `docs/`. The renderer combines those partials with `iii.worker.yaml.name` and `config.yaml` to produce the three rendered artifacts.

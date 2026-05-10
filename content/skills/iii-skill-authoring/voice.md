@@ -1,3 +1,9 @@
+---
+title: "Voice and tone for skill content"
+description: "Voice rules distilled from project-rules/voice.md and the slop-token lists, applied to worker README and skill content."
+type: "reference"
+---
+
 # Voice and tone for skill content
 
 Skill content reaches both human readers (via the published README on iii.dev) and LLM agents (via `iii://`). The same voice rules apply to both — declarative, confident, technical.
