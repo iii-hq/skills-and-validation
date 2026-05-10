@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 # summary.sh — emit a markdown report of skill-check results.
 #
-# Usage: summary.sh <log-file>
+# Usage: summary.sh <log-file> [mode-label]
 # Output goes to stdout — the caller redirects to $GITHUB_STEP_SUMMARY,
-# pipes into the PR-comment body, etc.
+# pipes into the PR-comment body, etc. `mode-label` (optional) is
+# appended to the title so consumers running the action multiple times
+# in one workflow (matrix over modes) can tell their sticky comments
+# apart at a glance.
 
 set -euo pipefail
 
 input="${1:?missing log-file arg}"
+MODE_LABEL="${2:-}"
 
 violations=$(grep -cE '^[^[:space:]][^:]+:[0-9]+ — ' "$input" || true)
 counts=$(grep -E '^[0-9]+ verified, [0-9]+ skipped' "$input" | tail -1 || true)
 layers=$(grep -E '^layers ran:' "$input" | tail -1 | sed -E 's/^layers ran: *//' || true)
 
-echo "## skill-check"
+if [ -n "$MODE_LABEL" ]; then
+  echo "## skill-check — $MODE_LABEL"
+else
+  echo "## skill-check"
+fi
 echo
 if [ -n "$counts" ]; then
   echo "$counts."

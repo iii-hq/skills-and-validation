@@ -231,7 +231,10 @@ runs:
           "${{ inputs.layers }}" 2>&1 | tee -a "$log" || rc=$?
 
         "${{ github.action_path }}/scripts/annotate.sh" "$log" || true
-        "${{ github.action_path }}/scripts/summary.sh" "$log" > "$body"
+        "${{ github.action_path }}/scripts/summary.sh" \
+          "$log" \
+          "${{ steps.mode.outputs.mode }}" \
+          > "$body"
         cat "$body" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
         echo "log=$log" >> "$GITHUB_OUTPUT"
