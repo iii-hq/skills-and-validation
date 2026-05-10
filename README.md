@@ -11,27 +11,33 @@ Ships two binaries and a composite GitHub Action. Consumers pin a `version` in `
 
 ## Setup
 
-Three things to install, in this order: the authoring skill bundle (so your tooling can read the conventions), the binaries (for local render + validation), and the pre-commit hook (so commits run the validator automatically).
+Three things to install, in this order: the authoring skill bundles (so your tooling can read the conventions), the binaries (for local render + validation), and the pre-commit hook (so commits run the validator automatically).
 
-### 1. Install the iii-skill-authoring skill bundle
+### 1. Install the authoring skill bundles
 
-The bundle is the canonical guide for worker docs — directory layout, renderer slots, voice rules, per-function leaves, llm-only block round-trip, and how to run `iii-skill-check` locally. Pick the surface that fits your tooling:
+Two bundles ship from `content/skills/`:
 
-**Through skillkit:**
+- **`iii-skill-authoring`** — for authoring iii worker partials. Directory layout, renderer slots, voice rules, per-function leaves, llm-only round-trip, running `iii-skill-check` against a worker. Use when you're writing the partials a worker's docs render from.
+- **`iii-doc-authoring`** — for authoring Mintlify-shaped `.md` / `.mdx` docs that the docs-mode pipeline validates. Frontmatter shape, Diataxis types, the `<!-- skill:... -->` marker reference, the per-quadrant writing guides under `iii-doc-authoring/diataxis/`. Use when you're writing standalone documentation outside a worker.
+
+Pick the surface that fits your tooling:
+
+**Through skillkit** (installs both bundles):
 
 ```bash
 cd $HOME && npx skillkit add iii-hq/skills-and-validation/content/skills
 ```
 
-**Through the iii engine** (after step 2 below puts the bundle on disk under `~/.local/share/skill-check/current/content/skills/`):
+**Through the iii engine** (after step 2 below puts the bundles on disk under `~/.local/share/skill-check/current/content/skills/`):
 
 ```yaml
 # in your iii engine config.yaml
 skills:
   - ~/.local/share/skill-check/current/content/skills/iii-skill-authoring/**/*.md
+  - ~/.local/share/skill-check/current/content/skills/iii-doc-authoring/**/*.md
 ```
 
-Browse topics with `skillkit read iii-skill-authoring/<topic>`. The bundle covers `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`.
+Browse topics with `skillkit read iii-skill-authoring/<topic>` or `skillkit read iii-doc-authoring/<topic>`. The worker bundle covers `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`. The docs bundle covers `quickstart`, `frontmatter`, `types`, `markers`, `voice`, `llm-only-blocks`, `check`, plus the `diataxis/` writing guides — `doc_workflow`, `doc_tutorial`, `doc_howto`, `doc_reference`, and `doc_explanation`.
 
 ### 2. Install the binaries
 
@@ -52,9 +58,9 @@ Layout after install:
 ```
 ~/.local/share/skill-check/<version>/      # extracted release tarball
                           /<version>/bin/  # iii-skill-{check,render} binaries
-                          /<version>/content/   # bundled rules + Vale styles + iii-skill-authoring
+                          /<version>/content/   # bundled rules + Vale styles + skill bundles (iii-skill-authoring, iii-doc-authoring)
                           /<version>/templates/ # .skill-check.yaml + example-worker
-                          /<version>/scripts/   # ci-install.sh, verify.sh, pre-commit-hook.sh, install-hook.sh
+                          /<version>/scripts/   # ci-install.sh, verify-workers.sh, verify-docs.sh, pre-commit-hook.sh, install-hook.sh
                           /current          # symlink → <version> (re-pointed on every install)
 ~/.local/bin/iii-skill-render              # symlink → current/bin/iii-skill-render
 ~/.local/bin/iii-skill-check               # symlink → current/bin/iii-skill-check
