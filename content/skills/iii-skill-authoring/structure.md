@@ -12,8 +12,8 @@ A worker that uses `iii-skill-check` keeps narrative source under `docs/`. The r
 
 ```
 <worker>/
-├── iii.worker.yaml          # name, description (renderer reads name)
-├── config.yaml              # default runtime config (rendered verbatim under ## Configuration)
+├── iii.worker.yaml          # worker manifest — name, description, deploy stanza (renderer reads name)
+├── config.yaml              # worker runtime config — rendered verbatim under ## Configuration. Distinct from the engine's ~/.iii/config.yaml.
 ├── docs/
 │   ├── intro.md             # paragraph(s) shown after the H1 in README and skill.md
 │   ├── quickstart.md        # body of ## Quickstart in README only

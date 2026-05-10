@@ -11,7 +11,7 @@ type: "how-to"
 ## Render
 
 ```bash
-cargo run --manifest-path iii-skill-check/Cargo.toml -- render --write <worker>
+iii-skill-check render --write <worker>
 ```
 
 Reads `iii.worker.yaml.name`, `config.yaml`, and the partials under `<worker>/docs/`. Writes `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`.
@@ -21,7 +21,7 @@ Drop the `--write` flag to render to memory only — useful for previewing the r
 ## Verify all layers
 
 ```bash
-cargo run --manifest-path iii-skill-check/Cargo.toml -- verify <worker>
+iii-skill-check verify <worker>
 ```
 
 Runs three layers in order, accumulating violations:
@@ -35,7 +35,7 @@ Subset the layers with `--layers structure,vale` to skip the AI call locally.
 ## Verify rendered artifacts match source
 
 ```bash
-cargo run --manifest-path iii-skill-check/Cargo.toml -- verify-rendered <worker>
+iii-skill-check verify-rendered <worker>
 ```
 
 Re-renders the worker in memory and diffs against the on-disk `README.md`, `skill.md`, and `skills/*.md`. Non-zero exit means an artifact drifted from the partials. Re-run `render --write` to fix.
