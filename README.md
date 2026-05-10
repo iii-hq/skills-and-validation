@@ -11,9 +11,32 @@ Ships two binaries and a composite GitHub Action. Consumers pin a `version` in `
 
 ## Setup
 
-Three things to install, in this order: the authoring skill bundles (so your tooling can read the conventions), the binaries (for local render + validation), and the pre-commit hook (so commits run the validator automatically).
+Four things to install, in this order: Vale (the prose linter the validator shells out to), the authoring skill bundles (so your tooling can read the conventions), the binaries (for local render + validation), and the pre-commit hook (so commits run the validator automatically).
 
-### 1. Install the authoring skill bundles
+### 1. Install Vale
+
+`iii-skill-check`'s vale layer shells out to the [Vale](https://vale.sh) binary. Without it, every local run fails the moment vale is invoked. The composite GitHub Action installs Vale into the runner automatically; only local installs need this step.
+
+```bash
+# macOS
+brew install vale
+
+# Linux (Homebrew on Linux works too)
+brew install vale
+
+# Or download a release directly
+# https://github.com/errata-ai/vale/releases
+```
+
+Confirm it's on your `PATH`:
+
+```bash
+vale --version
+```
+
+The pinned Vale version we test against is in `.github/workflows/dogfood.yml` (`VALE_VERSION`). The CLI is generally backward-compatible across patch versions; pin if you need bit-exact reproducibility.
+
+### 2. Install the authoring skill bundles
 
 Two bundles ship from `content/skills/`:
 
@@ -28,7 +51,7 @@ Pick the surface that fits your tooling:
 cd $HOME && npx skillkit add iii-hq/skills-and-validation/content/skills
 ```
 
-**Through the iii engine** (after step 2 below puts the bundles on disk under `~/.local/share/skill-check/current/content/skills/`):
+**Through the iii engine** (after step 3 below puts the bundles on disk under `~/.local/share/skill-check/current/content/skills/`):
 
 ```yaml
 # in your iii engine config.yaml
@@ -39,7 +62,7 @@ skills:
 
 Browse topics with `skillkit read iii-skill-authoring/<topic>` or `skillkit read iii-doc-authoring/<topic>`. The worker bundle covers `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`. The docs bundle covers `quickstart`, `frontmatter`, `types`, `markers`, `voice`, `llm-only-blocks`, `check`, plus the `diataxis/` writing guides — `doc_workflow`, `doc_tutorial`, `doc_howto`, `doc_reference`, and `doc_explanation`.
 
-### 2. Install the binaries
+### 3. Install the binaries
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash
@@ -73,7 +96,7 @@ Add `~/.local/bin` to your `PATH` if it isn't already. Override either default w
 | `SKV_DIR` | `~/.local/share/skill-check` | Where versioned release dirs and `current` symlink go |
 | `SKV_BIN` | `~/.local/bin`               | Where the `iii-skill-{check,render}` shims land       |
 
-### 3. Install the pre-commit hook
+### 4. Install the pre-commit hook
 
 The hook installs into whatever git repo you're currently in, so `cd` into the consumer repo first — running the script from somewhere else (including a clone of `skills-and-validation` itself) is almost never what you want, and the script will refuse if it detects it's being run from this repo.
 
@@ -402,7 +425,7 @@ Tagging triggers `release.yml` and is effectively irreversible once consumers pi
 `CARGO_MANIFEST_DIR` is baked into the test binary at compile time. After a parent-directory rename, run `cargo clean` to force a rebuild with the new path.
 
 **Vale layer fails with `vale: command not found`.**
-Install Vale per the upstream docs: https://docs.vale.sh/topics/installation
+Vale is a hard prerequisite for local runs — see [Setup → 1. Install Vale](#1-install-vale). The composite Action installs it on the runner; locally `brew install vale` or grab a release from https://github.com/errata-ai/vale/releases.
 
 **`cross install --locked` fails in CI.**
 cross-rs occasionally lags behind cargo updates. Two fallback options:
