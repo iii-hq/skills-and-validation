@@ -6,7 +6,7 @@ use std::fmt;
 
 /// Diataxis doc category. Drives type-aware Vale rule selection and the
 /// AI-layer system prompt's per-artifact context.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DocType {
     Tutorial,

@@ -11,10 +11,10 @@ type: "how-to"
 ## Render
 
 ```bash
-iii-skill-check render --write <worker>
+iii-skill-render <worker> --write
 ```
 
-Reads `iii.worker.yaml.name`, `config.yaml`, and the partials under `<worker>/docs/`. Writes `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`.
+Reads `iii.worker.yaml.name`, `<worker>/config.yaml`, and the partials under `<worker>/docs/`. Writes `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`.
 
 Drop the `--write` flag to render to memory only — useful for previewing the rendered output without touching the on-disk artifacts.
 
@@ -38,7 +38,7 @@ Subset the layers with `--layers structure,vale` to skip the AI call locally.
 iii-skill-check verify-rendered <worker>
 ```
 
-Re-renders the worker in memory and diffs against the on-disk `README.md`, `skill.md`, and `skills/*.md`. Non-zero exit means an artifact drifted from the partials. Re-run `render --write` to fix.
+Re-renders the worker in memory and diffs against the on-disk `README.md`, `skill.md`, and `skills/*.md`. Non-zero exit means an artifact drifted from the partials. Re-run `iii-skill-render <worker> --write` to fix.
 
 ## Reading violations
 

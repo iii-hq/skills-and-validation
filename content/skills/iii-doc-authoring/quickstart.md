@@ -60,11 +60,13 @@ The renderer writes one `<source>.skill.md` sibling per matched doc. Commit thos
 ## 4. Plug into CI
 
 ```yaml
-- uses: iii-hq/skills-and-validation@v0.1
+- uses: iii-hq/skills-and-validation@v0.2
   with:
-    docs-root: .
+    docs-glob: "**/*.md **/*.mdx"
     write: true
     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-The action auto-detects the mode from `.skill-check.yaml`. Worker-mode consumers don't pass `docs-root`; docs-mode consumers leave `workers-glob` at its default and ignore it.
+The action auto-detects the mode from `.skill-check.yaml` at the workspace root (override the path with `config-path` for repos that keep their config elsewhere). Worker-mode consumers leave `docs-glob` at its default; docs-mode consumers leave `workers-glob` at its default. The unused input is ignored either way.
+
+Repos that mix worker dirs with docs run the action twice via a matrix strategy — one entry per `config-path`. Each run posts a sticky PR comment keyed off its config so they don't clobber each other.

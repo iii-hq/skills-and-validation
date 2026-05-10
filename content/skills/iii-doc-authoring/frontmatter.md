@@ -36,7 +36,7 @@ owner: "platform"
 type: "reference"
 ---
 
-The engine reads `~/.iii/config.yaml` on startup …
+The engine reads `config.yaml` from the cwd (or the path passed to `iii --config`) on startup …
 ```
 
 The renderer strips the frontmatter from the rendered `<source>.skill.md` artifact.

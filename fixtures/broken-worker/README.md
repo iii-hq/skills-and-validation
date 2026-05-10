@@ -14,7 +14,7 @@ See [the missing leaf](iii://broken-worker/nonexistent) for the legacy interface
 iii worker add broken-worker
 ```
 
-`iii worker add` fetches the binary, writes a config block into `~/.iii/config.yaml`, and the engine starts the worker on the next `iii worker start`.
+`iii worker add` fetches the binary, writes a config block into the engine's `config.yaml`, and the engine starts the worker on the next `iii worker start`.
 
 ## Quickstart
 

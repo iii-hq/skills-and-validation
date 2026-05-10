@@ -6,7 +6,7 @@ type: "reference"
 
 # Worker skeleton
 
-Copy-paste starter for a new worker. After cloning, every placeholder is one `s/<worker>/your-name/` away from a working partial set. Run `iii-skill-check render --write <worker>` once the placeholders are filled in.
+Copy-paste starter for a new worker. After cloning, every placeholder is one `s/<worker>/your-name/` away from a working partial set. Run `iii-skill-render <worker> --write` once the placeholders are filled in.
 
 ## File layout to create
 
@@ -143,12 +143,12 @@ iii worker add <sibling>
 ## After filling in placeholders
 
 ```bash
-cargo run --manifest-path iii-skill-check/Cargo.toml -- render --write <worker>
-cargo run --manifest-path iii-skill-check/Cargo.toml -- verify <worker> --layers structure,vale
+iii-skill-render <worker> --write
+iii-skill-check verify <worker> --layers structure,vale
 ```
 
-The first command produces `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`. The second exercises Layer 1 (structure) and Layer 2 (Vale) locally. The AI layer requires `ANTHROPIC_API_KEY`; CI runs it on every PR.
+The first command produces `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`. The second exercises the structure and Vale layers locally. The AI layer requires `ANTHROPIC_API_KEY`; CI runs it on every PR.
 
 ## Worked example
 
-`workers/textstats/` is the canonical fixture worker — three functions, one llm-only block, every renderer slot exercised. Read its partials under `textstats/docs/` to see what the placeholders look like filled in.
+`templates/example-worker/` (the `textstats` worker) is the canonical fixture — three functions, one llm-only block, every renderer slot exercised. Read its partials under `templates/example-worker/docs/` to see what the placeholders look like filled in.
