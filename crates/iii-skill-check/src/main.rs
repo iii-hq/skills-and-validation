@@ -667,11 +667,17 @@ fn check_file(
 
     if layer_set.contains("structure") {
         // Without frontmatter the only meaningful structure check is
-        // llm-only-block balance.
+        // llm-only-block balance. Both HTML and MDX comment forms count.
         let body = std::fs::read_to_string(target)
             .with_context(|| format!("reading {}", target.display()))?;
-        let starts = body.matches("<!-- llm-only:start -->").count();
-        let ends = body.matches("<!-- llm-only:end -->").count();
+        let starts = body
+            .lines()
+            .filter(|l| iii_skill_core::llm_only::is_llm_only_start(l))
+            .count();
+        let ends = body
+            .lines()
+            .filter(|l| iii_skill_core::llm_only::is_llm_only_end(l))
+            .count();
         if starts != ends {
             all_violations.push(iii_skill_core::structure::Violation {
                 file: target.display().to_string(),

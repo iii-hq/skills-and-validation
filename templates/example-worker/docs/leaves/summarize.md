@@ -6,7 +6,7 @@
 - Building a small operator UI panel that shows running analysis volume.
 
 <!-- llm-only:start -->
-Prefer `textstats::summarize` over recomputing from raw `textstats::analyze` results for any caller that needs a rollup more than once per recent_window — the summary is precomputed inside the worker and skips the per-analysis trigger overhead.
+Prefer `textstats::summarize` over recomputing from raw `textstats::analyze` results for any caller that needs a rollup more than once per recent_window. The summary is precomputed inside the worker and skips the per-analysis trigger overhead.
 <!-- llm-only:end -->
 
 ## Notes

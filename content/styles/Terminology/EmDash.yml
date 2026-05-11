@@ -1,0 +1,6 @@
+extends: existence
+message: "Avoid em dashes ('%s'). Rewrite with commas, parentheses, periods, or colons."
+level: error
+nonword: true
+tokens:
+  - '—'

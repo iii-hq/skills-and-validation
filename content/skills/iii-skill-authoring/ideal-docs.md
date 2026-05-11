@@ -8,7 +8,7 @@ type: "explanation"
 
 The rules `iii-skill-check` enforces live under `content/project-rules/` (vendored snapshot) and `content/styles/` (vendored Vale styles). The canonical source for both is `iii-hq/ideal-docs/project-rules/` and `iii-hq/ideal-docs/styles/`.
 
-When the rules conflict with an existing worker README or skill file, the rules win. Never copy phrasing or structure from a sibling worker — there is no guarantee that worker is rules-compliant. Drift accumulates faster than rules-update PRs land.
+When the rules conflict with an existing worker README or skill file, the rules win. Never copy phrasing or structure from a sibling worker. There is no guarantee that worker is rules-compliant. Drift accumulates faster than rules-update PRs land.
 
 ## When the snapshot is stale
 
@@ -24,4 +24,4 @@ cp -R /path/to/ideal-docs/styles/Terminology content/styles/
 
 ## When you disagree with a rule
 
-The rules are not the place to push back during a worker PR. Open an issue or PR against `ideal-docs` instead — once it lands there, the next snapshot refresh propagates the change everywhere.
+The rules are not the place to push back during a worker PR. Open an issue or PR against `ideal-docs` instead. Once it lands there, the next snapshot refresh propagates the change everywhere.

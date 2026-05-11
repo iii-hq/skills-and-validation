@@ -1,6 +1,6 @@
 ---
 title: "Worker skeleton"
-description: "Copy-paste starter for a new worker — placeholders that turn into a working partial set after one s/<worker>/your-name/."
+description: "Copy-paste starter for a new worker: placeholders that turn into a working partial set after one s/<worker>/your-name/."
 type: "reference"
 ---
 
@@ -24,8 +24,8 @@ Copy-paste starter for a new worker. After cloning, every placeholder is one `s/
 
 Optional partials:
 
-- `docs/companions.md` — when this worker pairs with a sibling.
-- `docs/migration.md` — when there is a breaking change to flag.
+- `docs/companions.md`: when this worker pairs with a sibling.
+- `docs/migration.md`: when there is a breaking change to flag.
 
 ## `iii.worker.yaml`
 
@@ -60,7 +60,7 @@ Optional second paragraph that LLM agents see but human readers do not.
 
 ## `docs/quickstart.md`
 
-Show one fenced block per language the worker is callable from — Rust, TypeScript, and Python. Use a four-backtick outer fence around the partial since each block uses triple-backtick fences inside:
+Show one fenced block per language the worker is callable from: Rust, TypeScript, and Python. Use a four-backtick outer fence around the partial since each block uses triple-backtick fences inside:
 
 ````markdown
 ```rust
@@ -130,7 +130,7 @@ The example calls `<worker>::<verb>`. Other entry points: `<worker>::<verb-2>`, 
 
 ## `docs/companions.md` (optional)
 
-Four-backtick outer fence again — the body has its own `bash` fence:
+Four-backtick outer fence again. The body has its own `bash` fence:
 
 ````markdown
 To <do something specific> with this worker, add the [<sibling>](../<sibling>) worker as well:
@@ -151,4 +151,4 @@ The first command produces `<worker>/README.md`, `<worker>/skill.md`, and `<work
 
 ## Worked example
 
-`templates/example-worker/` (the `textstats` worker) is the canonical fixture — three functions, one llm-only block, every renderer slot exercised. Read its partials under `templates/example-worker/docs/` to see what the placeholders look like filled in.
+`templates/example-worker/` (the `textstats` worker) is the canonical fixture: three functions, one llm-only block, every renderer slot exercised. Read its partials under `templates/example-worker/docs/` to see what the placeholders look like filled in.

@@ -7,5 +7,5 @@
 
 ## Notes
 
-- The diff is set-based. Order, duplicates, and position are not preserved — `"a b a"` and `"a b"` are equivalent inputs.
+- The diff is set-based. Order, duplicates, and position are not preserved (`"a b a"` and `"a b"` are equivalent inputs).
 - For a position-aware diff, use a dedicated diff worker; this one is for quick token-set comparison.

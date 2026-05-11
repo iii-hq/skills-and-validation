@@ -1,18 +1,27 @@
 ---
-title: "Markers"
-description: "Reference for the skill: HTML-comment markers that override doc-level scope and filter sections."
-type: "reference"
+title: 'Markers'
+description: 'Reference for the skill: HTML and MDX comment markers that override doc-level scope and filter sections.'
+type: 'reference'
 ---
 
 # Markers
 
-`<!-- skill:... -->` HTML comments override the include/exclude globs in `.skill-check.yaml` (doc-level) or filter what makes it into the rendered skill (section-level).
+`skill:...` comments override the include/exclude globs in `.skill-check.yaml` (doc-level) or filter what makes it into the rendered skill (section-level).
+
+## Comment forms
+
+Two equivalent forms are accepted on every `skill:` marker:
+
+- HTML form, e.g., `<!-- skill:include-doc -->`. Works in `.md`.
+- MDX form, e.g., `{/* skill:include-doc */}`. Works in both `.md` and `.mdx`.
+
+`.mdx` files strip HTML comments at render time, so MDX-based pages should use the MDX form. Plain `.md` accepts either form. The validator recognises both equally. The examples below use the HTML form for readability, but every line is interchangeable with its MDX equivalent.
 
 ## Doc-level
 
 `<!-- skill:include-doc -->`
 
-Pulls this doc into the skill set when the `docs.include` list missed it. Useful for one-off docs in a directory the include patterns don't cover. **Path-based excludes still win** — if `docs.exclude` matches the path, this marker has no effect.
+Pulls this doc into the skill set when the `docs.include` list missed it. Useful for one-off docs in a directory the include patterns don't cover. **Path-based excludes still win**: if `docs.exclude` matches the path, this marker has no effect.
 
 `<!-- skill:exclude-doc -->`
 
@@ -20,12 +29,12 @@ Drops this doc from the skill set even if it matched the include list. Useful fo
 
 Precedence:
 
-1. `docs.exclude` (path-based) — hard out, beats everything else.
-2. `<!-- skill:exclude-doc -->` — beats include-doc + the include list.
-3. `<!-- skill:include-doc -->` — beats an include-list miss.
-4. `docs.include` — default in/out signal.
+1. `docs.exclude` (path-based): hard out, beats everything else.
+2. `<!-- skill:exclude-doc -->`: beats include-doc + the include list.
+3. `<!-- skill:include-doc -->`: beats an include-list miss.
+4. `docs.include`: default in/out signal.
 
-Either marker can appear anywhere in the file but conventionally lives near the top. If both appear in the same file the structure layer flags it — pick one.
+Either marker can appear anywhere in the file but conventionally is located near the top. If both appear in the same file the structure layer flags it; pick one.
 
 ## Section-level
 
@@ -46,7 +55,7 @@ Goes into the skill.
 
 ## Internals <!-- skill:exclude-section -->
 
-Skipped — too implementation-specific for AI consumers.
+Skipped: too implementation-specific for AI consumers.
 ```
 
 ## File-level default
@@ -63,4 +72,4 @@ No section is in the skill unless an `include-section` marker keeps it. Use this
 
 The section body still goes through `<!-- llm-only:start -->` / `<!-- llm-only:end -->` unwrapping, so you can keep AI-only context within a section without leaking it to readers of the source.
 
-The renderer drops every `skill:` marker line from the rendered output, including markers that appear on a heading line — the heading text itself stays.
+The renderer drops every `skill:` marker line from the rendered output, including markers that appear on a heading line; the heading text itself stays.

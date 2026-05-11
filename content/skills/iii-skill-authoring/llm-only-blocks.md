@@ -1,15 +1,22 @@
 ---
 title: "llm-only comment blocks"
-description: "Use llm-only block markers to land one source on two render targets — visible in skill, hidden from README."
+description: "Use llm-only block markers to land one source on two render targets: visible in skill, hidden from README."
 type: "how-to"
 ---
 
 # llm-only comment blocks
 
-A `<!-- llm-only:start --> ... <!-- llm-only:end -->` block lets one source file produce two render targets:
+An `llm-only:start` / `llm-only:end` block lets one source file produce two render targets:
 
-- **README.md target** — the markers stay as literal HTML comments. Mintlify, GitHub, and most other markdown renderers omit HTML comments from the published page, so a human reader on iii.dev never sees the content.
-- **skill.md / skills/*.md target** — the renderer strips the marker lines, leaving the inner body as plain prose. The agent reading the skill body sees the content.
+- **README.md target**: the markers stay as literal comments. Mintlify, GitHub, and most other markdown renderers omit HTML comments from the published page, so a human reader on iii.dev never sees the content.
+- **skill.md / skills/*.md target**: the renderer strips the marker lines, leaving the inner body as plain prose. The agent reading the skill body sees the content.
+
+Two equivalent comment forms are accepted:
+
+- HTML form: `<!-- llm-only:start -->`, `<!-- llm-only:end -->`, `<!-- llm-only: inline note -->`.
+- MDX form: `{/* llm-only:start */}`, `{/* llm-only:end */}`, `{/* llm-only: inline note */}`.
+
+`.mdx` files strip HTML comments at render time, so partials authored in MDX should use the MDX form. Plain `.md` partials accept either. The two can be mixed in the same file.
 
 ## When to use
 
@@ -20,7 +27,7 @@ A `<!-- llm-only:start --> ... <!-- llm-only:end -->` block lets one source file
 ## When not to use
 
 - Hiding general gotchas. If a behaviour will surprise a human reader, it belongs in the public `## Notes` section, not in an llm-only block.
-- Storing internal team notes. Use a separate doc — llm-only blocks are still committed to the repo and visible to anyone reading source.
+- Storing internal team notes. Use a separate doc; llm-only blocks are still committed to the repo and visible to anyone reading source.
 - Hiding caveats from the docs site. Voice rules apply to both render targets.
 
 ## Inline form
@@ -35,4 +42,4 @@ The inline form must be on a line of its own. Embedded mid-paragraph inline llm-
 
 ## Validation
 
-The structure layer of `iii-skill-check verify` enforces that every `:start` marker has a matching `:end` marker on its own line. Unbalanced blocks fail the layer.
+The structure layer of `iii-skill-check verify` enforces that every `llm-only:start` marker has a matching `llm-only:end` marker on its own line. The balance check counts HTML and MDX forms together, so a file can open in one form and close in the other and still balance. Unbalanced blocks fail the layer.

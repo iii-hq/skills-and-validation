@@ -1,0 +1,30 @@
+# Canonical skill-check workflow for a consumer repo.
+#
+# Drop this into `.github/workflows/skill-check.yml` to add iii-skill-check
+# validation to your repo. The action auto-detects worker vs docs mode from
+# `.skill-check.yaml` at the workspace root (override the path with
+# `config-path` for repos that keep their config elsewhere).
+#
+# Pin the version on the `uses:` line to a tag you've validated against.
+
+name: skill-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests:
+    write # opt-in: enables the sticky PR comment.
+    # Omit to keep just inline annotations + the run summary.
+
+jobs:
+  skill-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: iii-hq/skills-and-validation@v0.1.0
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

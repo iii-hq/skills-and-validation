@@ -1,7 +1,7 @@
 ---
-title: "Worker docs source layout"
-description: "Reference for the docs/ partials a worker keeps and how each one feeds the rendered README, skill, and skills/leaves."
-type: "reference"
+title: 'Worker docs source layout'
+description: 'Reference for the docs/ partials a worker keeps and how each one feeds the rendered README, skill, and skills/leaves.'
+type: 'reference'
 ---
 
 # Worker docs source layout
@@ -12,8 +12,8 @@ A worker that uses `iii-skill-check` keeps narrative source under `docs/`. The r
 
 ```
 <worker>/
-├── iii.worker.yaml          # worker manifest — name, description, deploy stanza (renderer reads name)
-├── config.yaml              # worker runtime config — rendered verbatim under ## Configuration. Distinct from the engine's config.yaml (lives wherever the engine project does).
+├── iii.worker.yaml          # worker manifest: name, description, deploy stanza (renderer reads name)
+├── config.yaml              # worker runtime config, rendered verbatim under ## Configuration. Distinct from the engine's config.yaml (located wherever the engine project is).
 ├── docs/
 │   ├── intro.md             # paragraph(s) shown after the H1 in README and skill.md
 │   ├── quickstart.md        # body of ## Quickstart in README only
@@ -33,7 +33,7 @@ A worker that uses `iii-skill-check` keeps narrative source under `docs/`. The r
     └── <leaf>.md            # body for iii://<worker>/<leaf>
 ```
 
-Always run `iii-skill-render <worker> --write` before committing — the rendered files carry a generated banner and should not be hand-edited.
+Always run `iii-skill-render <worker> --write` before committing. The rendered files carry a generated banner and should not be hand-edited.
 
 ## Slot order in README.md
 
@@ -44,7 +44,7 @@ Always run `iii-skill-render <worker> --write` before committing — the rendere
 5. `## Quickstart` + `quickstart.md`.
 6. `## Configuration` + fenced `config.yaml`.
 7. `## Migration notes` + `migration.md` (only if present).
-8. `## Additional Resources` — one bullet per leaf, linking `skills/<leaf>.md` with the leaf's H1 as link text. Omitted when `docs/leaves/` is empty.
+8. `## Additional Resources`: one bullet per leaf, linking `skills/<leaf>.md` with the leaf's H1 as link text. Omitted when `docs/leaves/` is empty.
 
 ## Slot order in skill.md
 
@@ -54,7 +54,7 @@ llm-only blocks will be unwrapped.
 2. `# <name>`.
 3. `intro.md`
 4. `companions.md`
-5. `## Additional Resources` — same leaf bullets as the README. Omitted when `docs/leaves/` is empty.
+5. `## Additional Resources`: same leaf bullets as the README. Omitted when `docs/leaves/` is empty.
 
 ## Slot order in skills/<leaf>.md
 
@@ -63,4 +63,4 @@ Leaves are for additional topics, not specific functions.
 1. Generated banner.
 2. `docs/leaves/<leaf>.md`
 
-The leaf author chooses the H1 — typically a topical phrase like `# Sizing text before provider calls`, not the function id. The renderer also uses that H1 as link text in the `## Additional Resources` section, so picking a descriptive phrase pays off twice.
+The leaf author chooses the H1, typically a topical phrase like `# Sizing text before provider calls`, not the function id. The renderer also uses that H1 as link text in the `## Additional Resources` section, so picking a descriptive phrase pays off twice.

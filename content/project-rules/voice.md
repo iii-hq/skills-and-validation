@@ -33,3 +33,17 @@ examples carry the weight.
   aggrandizing.
 - Tutorial-speak ("Welcome! Let's get started!"). Be direct.
 - Hedging ("you might want to consider"). State the recommendation.
+- Disparaging characterizations of other systems or designs. Anything that frames a competitor or
+  prior approach as poorly attached ("bolted to the side", "bolted on", "tacked on", "duct-taped",
+  "glued on", "retrofitted") is out. The voice does not need to put other tools down to make iii
+  look good. State what iii does and let the comparison stand on its own. Vale catches the obvious
+  tokens; this rule is for the same idea phrased differently (e.g., "feels stapled together",
+  "looks like an afterthought", "shoehorned in").
+- Promotional capability lists inside non-explainer material. A how-to, install step, or reference
+  entry should not pause to introduce a tool with a feature-list bullet block in the shape of
+  "X gives your editor / project / system [adjective] [noun]: completions, hover docs, diagnostics,
+  …". That pattern belongs in an explanation or a dedicated overview page. In how-to / reference /
+  install contexts, state the install command and the user-facing trigger condition; link to the
+  capability list if it exists elsewhere. A page can describe what a tool does only when describing
+  what the tool does *is* the page's job (i.e., the page is an explanation or overview). Flag this
+  pattern wherever it appears, regardless of which tool or extension is being described.

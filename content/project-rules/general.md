@@ -43,6 +43,7 @@ both, and conflating them is a recurring failure mode. Always make clear which o
   the opt-out anonymous usage stream, **not** OpenTelemetry.
 
 Rules:
+
 - Never use bare "telemetry" to refer to OpenTelemetry surfaces — use "observability" or
   "OpenTelemetry".
 - Reserve the bare word "telemetry" for `iii-telemetry` (anonymous usage), or always qualify it
@@ -52,7 +53,7 @@ Rules:
 - `OTEL_ENABLED` and `III_TELEMETRY_ENABLED` are independent — disabling one does not disable
   the other. `how-to/disable-telemetry.mdx` documents both distinctly.
 
-The canonical disambiguation lives in [`workers.md`](./workers.md) ("Logger and telemetry belong
+The canonical disambiguation is in [`workers.md`](./workers.md) ("Logger and telemetry belong
 to iii-observability"); this rule lifts it so it's not buried.
 
 ## No "backend software" or "backend engineering"

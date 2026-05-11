@@ -19,7 +19,7 @@ use std::path::Path;
 /// `styles_path` should point at the `content/styles/` directory in the
 /// installed bundle (or a local override). It's emitted verbatim into
 /// the `StylesPath = ...` line, so it can be relative to wherever the
-/// generated config lives.
+/// generated config is.
 pub fn build(artifacts: &[(&Path, DocType)], styles_path: &str) -> String {
     let mut out = String::new();
     out.push_str(&format!("StylesPath = {styles_path}\n"));

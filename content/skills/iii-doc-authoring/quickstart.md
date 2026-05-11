@@ -46,7 +46,7 @@ Lead paragraph.
 …
 ```
 
-Required fields: `title`, `description`, `type`. Optional: `owner`. `type` must be one of `tutorial`, `how-to`, `reference`, `explanation` — see [`types`](./types.md).
+Required fields: `title`, `description`, `type`. Optional: `owner`. `type` must be one of `tutorial`, `how-to`, `reference`, `explanation` (see [`types`](./types.md)).
 
 ## 3. Render and validate
 
@@ -55,9 +55,18 @@ iii-skill-render <docs-root> --write     # writes <source>.skill.md per in-scope
 iii-skill-check verify <docs-root>       # structure + vale + ai
 ```
 
-The renderer writes one `<source>.skill.md` sibling per matched doc. Commit those alongside the sources — CI's `verify-rendered` flags drift between them and the source.
+The renderer writes one `<source>.skill.md` sibling per matched doc. Commit those alongside the sources; CI's `verify-rendered` flags drift between them and the source.
 
 ## 4. Plug into CI
+
+Adding the GitHub Actions workflow is required to wire this validation into a consumer repository. The canonical example ships with the install at `content/github_workflows_example.yml`. Copy it into the consumer repo:
+
+```bash
+cp ~/.local/share/skill-check/current/content/github_workflows_example.yml \
+   .github/workflows/skill-check.yml
+```
+
+Adjust the `uses:` ref to a pinned tag, then add overrides as needed:
 
 ```yaml
 - uses: iii-hq/skills-and-validation@v0.2
@@ -69,4 +78,4 @@ The renderer writes one `<source>.skill.md` sibling per matched doc. Commit thos
 
 The action auto-detects the mode from `.skill-check.yaml` at the workspace root (override the path with `config-path` for repos that keep their config elsewhere). Worker-mode consumers leave `docs-glob` at its default; docs-mode consumers leave `workers-glob` at its default. The unused input is ignored either way.
 
-Repos that mix worker dirs with docs run the action twice via a matrix strategy — one entry per `config-path`. Each run posts a sticky PR comment keyed off its config so they don't clobber each other.
+Repos that mix worker dirs with docs run the action twice via a matrix strategy, one entry per `config-path`. Each run posts a sticky PR comment keyed off its config so they don't clobber each other.

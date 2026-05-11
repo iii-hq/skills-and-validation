@@ -4,4 +4,4 @@ language: rust
 deploy: binary
 manifest: Cargo.toml
 bin: textstats
-description: Text analysis on the iii bus — word and character counts, word-level diffs, and recent-analysis rollups under textstats::*.
+description: "Text analysis on the iii bus: word and character counts, word-level diffs, and recent-analysis rollups under textstats::*."

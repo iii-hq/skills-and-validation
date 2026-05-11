@@ -5,7 +5,7 @@ use std::path::PathBuf;
 ///
 /// Resolution order:
 ///   1. Walk up from the running binary's directory. In a release tarball the
-///      binary lives at `<prefix>/bin/iii-skill-*` and content at
+///      binary is at `<prefix>/bin/iii-skill-*` and content at
 ///      `<prefix>/content/`, so the first walk-up step finds it. In a `cargo`
 ///      workspace the test/dev binary is under `target/...`; the loop walks up
 ///      until it reaches the workspace root.
@@ -32,9 +32,9 @@ pub fn find_content_root() -> Option<PathBuf> {
         }
     }
 
-    let skv_dir = std::env::var_os("SKV_DIR")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share/skill-check")))?;
+    let skv_dir = std::env::var_os("SKV_DIR").map(PathBuf::from).or_else(|| {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share/skill-check"))
+    })?;
     let candidate = skv_dir.join("current").join("content");
     if is_bundle_root(&candidate) {
         return Some(candidate);

@@ -30,4 +30,4 @@ cp -R /path/to/ideal-docs/styles/Terminology ./styles/
 
 ## What is local-only
 
-`_skill-check-prompt.md` in this directory is the system prompt for the `iii-skill-check` AI layer. It lives with the rules so changing the prompt belongs in the same change as changing the rules. It is local to this validator and not part of the upstream `ideal-docs` set.
+`_skill-check-prompt.md` in this directory is the system prompt for the `iii-skill-check` AI layer. It is stored with the rules so changing the prompt belongs in the same change as changing the rules. It is local to this validator and not part of the upstream `ideal-docs` set.

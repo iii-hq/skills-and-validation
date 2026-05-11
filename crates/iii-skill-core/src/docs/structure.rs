@@ -4,7 +4,7 @@
 //! sibling) and reports:
 //!   - Frontmatter missing / malformed / required field empty
 //!   - Unknown `type:` value
-//!   - Unbalanced `<!-- llm-only:start -->` / `<!-- llm-only:end -->`
+//!   - Unbalanced `llm-only:start` / `llm-only:end` (HTML or MDX form)
 //!   - Both `skill:include-doc` AND `skill:exclude-doc` declared in the
 //!     same file (a strong signal something's confused)
 
@@ -46,11 +46,17 @@ pub fn check_source(path: &Path) -> Vec<Violation> {
 }
 
 fn check_llm_only_balance(file: &str, content: &str) -> Vec<Violation> {
-    // Line-exact match so an inline backtick example
-    // (`<!-- llm-only:start -->`) inside prose doesn't count as a real
-    // marker.
-    let starts = count_line_exact(content, "<!-- llm-only:start -->");
-    let ends = count_line_exact(content, "<!-- llm-only:end -->");
+    // Line-exact match (via the marker predicates) so an inline backtick
+    // example inside prose doesn't count as a real marker. Both HTML and
+    // MDX comment forms are recognised.
+    let starts = content
+        .lines()
+        .filter(|l| crate::llm_only::is_llm_only_start(l))
+        .count();
+    let ends = content
+        .lines()
+        .filter(|l| crate::llm_only::is_llm_only_end(l))
+        .count();
     if starts == ends {
         return Vec::new();
     }
@@ -64,23 +70,28 @@ fn check_llm_only_balance(file: &str, content: &str) -> Vec<Violation> {
 }
 
 fn check_conflicting_doc_scope(file: &str, content: &str) -> Vec<Violation> {
-    let has_include = count_line_exact(content, "<!-- skill:include-doc -->") > 0;
-    let has_exclude = count_line_exact(content, "<!-- skill:exclude-doc -->") > 0;
+    use crate::docs::markers::DocScope;
+    let mut has_include = false;
+    let mut has_exclude = false;
+    for line in content.lines() {
+        match crate::docs::markers::parse_doc_scope_line(line) {
+            Some(DocScope::Include) => has_include = true,
+            Some(DocScope::Exclude) => has_exclude = true,
+            None => {}
+        }
+    }
     if has_include && has_exclude {
         return vec![Violation {
             file: file.to_string(),
             line: None,
             message:
-                "doc declares both `skill:include-doc` and `skill:exclude-doc` — pick one"
+                "doc declares both `skill:include-doc` and `skill:exclude-doc`: pick one"
                     .to_string(),
         }];
     }
     Vec::new()
 }
 
-fn count_line_exact(content: &str, marker: &str) -> usize {
-    content.lines().filter(|l| l.trim() == marker).count()
-}
 
 #[cfg(test)]
 mod tests {

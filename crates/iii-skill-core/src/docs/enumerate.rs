@@ -7,7 +7,7 @@
 //!      `<!-- skill:include-doc -->` keeps a glob-rejected file IN; a
 //!      `<!-- skill:exclude-doc -->` drops a glob-accepted file OUT.
 //!
-//! The `<source>.skill.md` artifact lives sibling to the source, so this
+//! The `<source>.skill.md` artifact is a sibling to the source, so this
 //! module also filters out any `.skill.md` files encountered during the
 //! walk — they're outputs, not sources.
 
@@ -58,7 +58,11 @@ pub fn enumerate(root: &Path, config: &DocsConfig) -> anyhow::Result<Vec<Discove
             continue;
         }
         // Skip rendered skill artifacts: `<source>.skill.md`.
-        if path.file_name().and_then(|s| s.to_str()).map_or(false, |n| n.ends_with(".skill.md")) {
+        if path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map_or(false, |n| n.ends_with(".skill.md"))
+        {
             continue;
         }
 
@@ -92,7 +96,11 @@ pub fn is_in_scope(path: &Path, root: &Path, config: &DocsConfig) -> anyhow::Res
     if ext != "md" && ext != "mdx" {
         return Ok(false);
     }
-    if path.file_name().and_then(|s| s.to_str()).map_or(false, |n| n.ends_with(".skill.md")) {
+    if path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .map_or(false, |n| n.ends_with(".skill.md"))
+    {
         return Ok(false);
     }
     let includes = compile_patterns(&config.include).context("compiling docs.include")?;
@@ -274,7 +282,11 @@ mod tests {
     fn is_in_scope_filters_per_file() {
         let tmp = TempDir::new().unwrap();
         write(tmp.path(), "guides/foo.mdx", fm());
-        write(tmp.path(), "queues/README.md", "rendered worker artifact, no frontmatter\n");
+        write(
+            tmp.path(),
+            "queues/README.md",
+            "rendered worker artifact, no frontmatter\n",
+        );
 
         let cfg = cfg(&["guides/**/*.mdx"], &[]);
         // In-scope: matches include glob.
