@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 #[derive(Parser)]
 #[command(
     name = "iii-skill-check",
+    version = iii_skill_core::update_check::installed_version(),
     about = "Validate worker README/skill or docs skill artifacts against project rules"
 )]
 struct Cli {
@@ -206,7 +207,44 @@ fn find_skill_check_yaml(start: &Path) -> Option<PathBuf> {
     }
 }
 
-// --- worker mode (existing) -----------------------------------------------
+// --- shared staging --------------------------------------------------------
+
+/// One rendered skill artifact staged on disk so `vale` can read it,
+/// alongside the canonical path the user expects to see in violation
+/// reports and the in-memory body so AI checks can skip a round-trip
+/// read.
+struct StagedArtifact {
+    /// Where the artifact would live on disk if the renderer had been
+    /// run (e.g. `<source>.skill.md`, `<worker>/README.md`). Vale
+    /// violations and AI prompts both reference this path.
+    canonical: PathBuf,
+    /// Where we actually wrote the rendered bytes for vale to read.
+    temp: PathBuf,
+    /// Rendered bytes — handed to the in-memory AI check so we don't
+    /// re-read from disk.
+    body: String,
+}
+
+/// Replace vale's temp-path file references with the canonical paths.
+/// Vale takes file paths via argv and echoes them back in its JSON
+/// output; without this rewrite, users would see violations against
+/// scratch dirs like `/tmp/xxx/a0/README.md`.
+fn rewrite_vale_paths(
+    violations: &mut [iii_skill_core::structure::Violation],
+    staged: &[StagedArtifact],
+) {
+    for v in violations.iter_mut() {
+        let v_file = v.file.as_str();
+        for s in staged {
+            if v_file == s.temp.to_string_lossy() {
+                v.file = s.canonical.display().to_string();
+                break;
+            }
+        }
+    }
+}
+
+// --- worker mode -----------------------------------------------------------
 
 fn verify_worker(
     worker: &Path,
@@ -217,7 +255,6 @@ fn verify_worker(
     vale_override: Option<PathBuf>,
 ) -> anyhow::Result<()> {
     let layer_set: HashSet<&str> = layers.split(',').map(|s| s.trim()).collect();
-    let artifacts = enumerate_rendered_artifacts(worker);
 
     let mut all_violations: Vec<iii_skill_core::structure::Violation> = Vec::new();
     let mut ai_failures: Vec<(PathBuf, String)> = Vec::new();
@@ -226,14 +263,74 @@ fn verify_worker(
         all_violations.extend(iii_skill_core::structure::check(worker)?);
     }
 
+    let needs_artifact = layer_set.contains("vale") || layer_set.contains("ai");
+    if !needs_artifact {
+        return report(&all_violations, &ai_failures, layers, &worker.display().to_string());
+    }
+
+    // Render in memory so vale + ai always see fresh artifacts — running
+    // `iii-skill-check verify <worker>` without a prior `render --write`
+    // would otherwise silently skip vale + ai when the rendered files
+    // don't exist yet.
+    let rendered = match iii_skill_core::render::render_worker(worker) {
+        Ok(r) => r,
+        Err(e) => {
+            all_violations.push(iii_skill_core::structure::Violation {
+                file: worker.display().to_string(),
+                line: None,
+                message: format!("render failed (cannot run vale/ai): {e}"),
+            });
+            return report(&all_violations, &ai_failures, layers, &worker.display().to_string());
+        }
+    };
+
+    // Mirror the worker layout inside a temp dir so vale's `[**/README.md]`,
+    // `[**/skill.md]`, and `[**/skills/*.md]` globs in content/.vale.ini
+    // still match.
+    let stage = tempfile::TempDir::new()
+        .context("creating temp dir for staged worker artifacts")?;
+    let stage_root = stage.path().join("worker");
+    let stage_skills = stage_root.join("skills");
+    std::fs::create_dir_all(&stage_skills)?;
+
+    let mut staged: Vec<StagedArtifact> = Vec::new();
+
+    let readme_tmp = stage_root.join("README.md");
+    std::fs::write(&readme_tmp, &rendered.readme)?;
+    staged.push(StagedArtifact {
+        canonical: worker.join("README.md"),
+        temp: readme_tmp,
+        body: rendered.readme.clone(),
+    });
+
+    let skill_tmp = stage_root.join("skill.md");
+    std::fs::write(&skill_tmp, &rendered.skill)?;
+    staged.push(StagedArtifact {
+        canonical: worker.join("skill.md"),
+        temp: skill_tmp,
+        body: rendered.skill.clone(),
+    });
+
+    for (leaf, body) in &rendered.leaves {
+        let leaf_tmp = stage_skills.join(format!("{leaf}.md"));
+        std::fs::write(&leaf_tmp, body)?;
+        staged.push(StagedArtifact {
+            canonical: worker.join("skills").join(format!("{leaf}.md")),
+            temp: leaf_tmp,
+            body: body.clone(),
+        });
+    }
+
     if layer_set.contains("vale") {
         let vale_config = resolve_vale_config(workers_root, vale_override.as_deref())?;
-        let refs: Vec<&Path> = artifacts.iter().map(|p| p.as_path()).collect();
-        all_violations.extend(iii_skill_core::vale::run(&refs, &vale_config)?);
+        let refs: Vec<&Path> = staged.iter().map(|s| s.temp.as_path()).collect();
+        let mut vs = iii_skill_core::vale::run(&refs, &vale_config)?;
+        rewrite_vale_paths(&mut vs, &staged);
+        all_violations.extend(vs);
     }
 
     if layer_set.contains("ai") {
-        let rules_dir = resolve_rules_dir(workers_root, &config, rules_override.as_deref())?;
+        let rules_dir = resolve_rules_dir(workers_root, config, rules_override.as_deref())?;
         // Worker README/skill/skills/leaves are how-to per content/.vale.ini.
         // Load the matching diataxis guide so the AI sees the same authoring
         // rules a human author reads from iii-doc-authoring/diataxis/doc_howto.md.
@@ -245,9 +342,10 @@ fn verify_worker(
         let system_prompt = std::fs::read_to_string(&prompt_path)
             .with_context(|| format!("reading {}", prompt_path.display()))?;
 
-        for art in &artifacts {
-            match iii_skill_core::ai::check_artifact(
-                art,
+        for art in &staged {
+            match iii_skill_core::ai::check_artifact_text(
+                &art.body,
+                &art.canonical,
                 &rules,
                 &system_prompt,
                 &config.ai_check.model,
@@ -255,7 +353,7 @@ fn verify_worker(
                 config.ai_check.max_tokens,
             )? {
                 Ok(()) => {}
-                Err(body) => ai_failures.push((art.clone(), body)),
+                Err(body) => ai_failures.push((art.canonical.clone(), body)),
             }
         }
     }
@@ -299,47 +397,78 @@ fn verify_docs(
     let mut all_violations: Vec<iii_skill_core::structure::Violation> = Vec::new();
     let mut ai_failures: Vec<(PathBuf, String)> = Vec::new();
 
-    // Resolve frontmatter once per doc; each layer reuses the type.
-    let mut typed: Vec<(iii_skill_core::docs::enumerate::DiscoveredDoc, iii_skill_core::docs::frontmatter::DocType)> =
-        Vec::new();
-    for doc in &docs {
+    // Render each in-scope doc in memory and stage it for vale. Doing the
+    // render here (rather than reading `<source>.skill.md` from disk)
+    // makes verify self-contained — running it without a prior
+    // `iii-skill-render --write` no longer silently skips vale + ai.
+    let needs_artifact = layer_set.contains("vale") || layer_set.contains("ai");
+    let stage = if needs_artifact {
+        Some(
+            tempfile::TempDir::new()
+                .context("creating temp dir for staged skill artifacts")?,
+        )
+    } else {
+        None
+    };
+    let mut staged: Vec<StagedArtifact> = Vec::new();
+    let mut staged_doc_types: Vec<iii_skill_core::docs::frontmatter::DocType> = Vec::new();
+
+    for (idx, doc) in docs.iter().enumerate() {
         if layer_set.contains("structure") {
             all_violations.extend(iii_skill_core::docs::structure::check_source(&doc.abs));
         }
-        // Try to recover the doc type. If frontmatter is broken, structure
-        // already flagged it; vale + ai then skip this doc rather than
-        // failing the whole run with a noisy error.
-        let body = match std::fs::read_to_string(&doc.abs) {
-            Ok(s) => s,
+        if !needs_artifact {
+            continue;
+        }
+        let rendered = match iii_skill_core::docs::render::render_doc(&doc.abs) {
+            Ok(r) => r,
             Err(e) => {
-                eprintln!("warning: skipping {} (can't read: {e})", doc.rel);
+                // Surface render failures so vale/ai don't silently
+                // "pass" for unrenderable docs; structure layer often
+                // flags the same frontmatter issue with more detail.
+                all_violations.push(iii_skill_core::structure::Violation {
+                    file: doc.rel.clone(),
+                    line: None,
+                    message: format!("render failed (cannot run vale/ai): {e}"),
+                });
                 continue;
             }
         };
-        if let Ok(parsed) = iii_skill_core::docs::frontmatter::parse(&body) {
-            typed.push((doc.clone(), parsed.frontmatter.doc_type));
-        }
+        let canonical = doc.skill_path();
+        let stage_dir = stage.as_ref().unwrap().path().join(format!("a{idx}"));
+        std::fs::create_dir_all(&stage_dir)?;
+        let basename = canonical.file_name().ok_or_else(|| {
+            anyhow::anyhow!("skill artifact has no basename: {}", canonical.display())
+        })?;
+        let temp = stage_dir.join(basename);
+        std::fs::write(&temp, &rendered.body)
+            .with_context(|| format!("writing staged artifact to {}", temp.display()))?;
+        staged.push(StagedArtifact {
+            canonical,
+            temp,
+            body: rendered.body,
+        });
+        staged_doc_types.push(rendered.frontmatter.doc_type);
     }
 
-    if layer_set.contains("vale") && !typed.is_empty() {
+    if layer_set.contains("vale") && !staged.is_empty() {
         let styles_path = resolve_styles_path()?;
-        let skill_paths: Vec<(PathBuf, iii_skill_core::docs::frontmatter::DocType)> = typed
+        let refs: Vec<(&Path, iii_skill_core::docs::frontmatter::DocType)> = staged
             .iter()
-            .map(|(d, ty)| (d.skill_path(), *ty))
-            .collect();
-        let refs: Vec<(&Path, iii_skill_core::docs::frontmatter::DocType)> = skill_paths
-            .iter()
-            .map(|(p, ty)| (p.as_path(), *ty))
+            .zip(staged_doc_types.iter())
+            .map(|(s, ty)| (s.temp.as_path(), *ty))
             .collect();
         let cfg = iii_skill_core::docs::vale_config::build(&refs, &styles_path);
         let tmp = tempfile::TempDir::new().context("creating temp dir for vale config")?;
         let cfg_path = tmp.path().join(".vale.ini");
         std::fs::write(&cfg_path, cfg).context("writing runtime vale config")?;
-        let artifact_paths: Vec<&Path> = skill_paths.iter().map(|(p, _)| p.as_path()).collect();
-        all_violations.extend(iii_skill_core::vale::run(&artifact_paths, &cfg_path)?);
+        let artifact_paths: Vec<&Path> = staged.iter().map(|s| s.temp.as_path()).collect();
+        let mut vs = iii_skill_core::vale::run(&artifact_paths, &cfg_path)?;
+        rewrite_vale_paths(&mut vs, &staged);
+        all_violations.extend(vs);
     }
 
-    if layer_set.contains("ai") && !typed.is_empty() {
+    if layer_set.contains("ai") && !staged.is_empty() {
         let rules_dir = resolve_rules_dir(root, config, rules_override.as_deref())?;
         let prompt_path = rules_dir.join("_skill-check-prompt.md");
         let system_prompt = std::fs::read_to_string(&prompt_path)
@@ -350,8 +479,7 @@ fn verify_docs(
             iii_skill_core::docs::frontmatter::DocType,
             String,
         > = std::collections::HashMap::new();
-        for (doc, ty) in &typed {
-            let skill = doc.skill_path();
+        for (art, ty) in staged.iter().zip(staged_doc_types.iter()) {
             let rules = match rules_by_type.get(ty) {
                 Some(r) => r.clone(),
                 None => {
@@ -360,8 +488,9 @@ fn verify_docs(
                     r
                 }
             };
-            match iii_skill_core::ai::check_artifact_with_type(
-                &skill,
+            match iii_skill_core::ai::check_artifact_text_with_type(
+                &art.body,
+                &art.canonical,
                 &rules,
                 &system_prompt,
                 *ty,
@@ -370,7 +499,7 @@ fn verify_docs(
                 config.ai_check.max_tokens,
             )? {
                 Ok(()) => {}
-                Err(body) => ai_failures.push((skill, body)),
+                Err(body) => ai_failures.push((art.canonical.clone(), body)),
             }
         }
     }
@@ -396,48 +525,79 @@ fn verify_doc_file(
         all_violations.extend(iii_skill_core::docs::structure::check_source(source));
     }
 
-    let body = std::fs::read_to_string(source)
-        .with_context(|| format!("reading {}", source.display()))?;
-    let frontmatter = iii_skill_core::docs::frontmatter::parse(&body).ok();
-    let skill_path = {
-        let mut s = source.as_os_str().to_owned();
-        s.push(".skill.md");
-        PathBuf::from(s)
-    };
+    let needs_artifact = layer_set.contains("vale") || layer_set.contains("ai");
+    if needs_artifact {
+        let skill_path = {
+            let mut s = source.as_os_str().to_owned();
+            s.push(".skill.md");
+            PathBuf::from(s)
+        };
+        match iii_skill_core::docs::render::render_doc(source) {
+            Ok(rendered) => {
+                let doc_type = rendered.frontmatter.doc_type;
+                let stage = tempfile::TempDir::new()
+                    .context("creating temp dir for staged skill artifact")?;
+                let basename = skill_path.file_name().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "skill artifact has no basename: {}",
+                        skill_path.display()
+                    )
+                })?;
+                let temp = stage.path().join(basename);
+                std::fs::write(&temp, &rendered.body)
+                    .with_context(|| format!("writing staged artifact to {}", temp.display()))?;
+                let staged = vec![StagedArtifact {
+                    canonical: skill_path.clone(),
+                    temp: temp.clone(),
+                    body: rendered.body,
+                }];
 
-    if let Some(parsed) = frontmatter.as_ref() {
-        let doc_type = parsed.frontmatter.doc_type;
+                if layer_set.contains("vale") {
+                    let styles_path = resolve_styles_path()?;
+                    let cfg = iii_skill_core::docs::vale_config::build(
+                        &[(temp.as_path(), doc_type)],
+                        &styles_path,
+                    );
+                    let cfg_tmp = tempfile::TempDir::new()
+                        .context("creating temp dir for vale config")?;
+                    let cfg_path = cfg_tmp.path().join(".vale.ini");
+                    std::fs::write(&cfg_path, cfg).context("writing runtime vale config")?;
+                    let mut vs = iii_skill_core::vale::run(&[temp.as_path()], &cfg_path)?;
+                    rewrite_vale_paths(&mut vs, &staged);
+                    all_violations.extend(vs);
+                }
 
-        if layer_set.contains("vale") && skill_path.is_file() {
-            let styles_path = resolve_styles_path()?;
-            let cfg = iii_skill_core::docs::vale_config::build(
-                &[(skill_path.as_path(), doc_type)],
-                &styles_path,
-            );
-            let tmp = tempfile::TempDir::new().context("creating temp dir for vale config")?;
-            let cfg_path = tmp.path().join(".vale.ini");
-            std::fs::write(&cfg_path, cfg).context("writing runtime vale config")?;
-            all_violations
-                .extend(iii_skill_core::vale::run(&[skill_path.as_path()], &cfg_path)?);
-        }
-
-        if layer_set.contains("ai") && skill_path.is_file() {
-            let rules_dir = resolve_rules_dir(docs_root, config, rules_override.as_deref())?;
-            let rules = load_project_rules(&rules_dir, Some(doc_type))?;
-            let prompt_path = rules_dir.join("_skill-check-prompt.md");
-            let system_prompt = std::fs::read_to_string(&prompt_path)
-                .with_context(|| format!("reading {}", prompt_path.display()))?;
-            match iii_skill_core::ai::check_artifact_with_type(
-                &skill_path,
-                &rules,
-                &system_prompt,
-                doc_type,
-                &config.ai_check.model,
-                &config.ai_check.api_key_env_var,
-                config.ai_check.max_tokens,
-            )? {
-                Ok(()) => {}
-                Err(body) => ai_failures.push((skill_path.clone(), body)),
+                if layer_set.contains("ai") {
+                    let rules_dir =
+                        resolve_rules_dir(docs_root, config, rules_override.as_deref())?;
+                    let rules = load_project_rules(&rules_dir, Some(doc_type))?;
+                    let prompt_path = rules_dir.join("_skill-check-prompt.md");
+                    let system_prompt = std::fs::read_to_string(&prompt_path)
+                        .with_context(|| format!("reading {}", prompt_path.display()))?;
+                    match iii_skill_core::ai::check_artifact_text_with_type(
+                        &staged[0].body,
+                        &skill_path,
+                        &rules,
+                        &system_prompt,
+                        doc_type,
+                        &config.ai_check.model,
+                        &config.ai_check.api_key_env_var,
+                        config.ai_check.max_tokens,
+                    )? {
+                        Ok(()) => {}
+                        Err(body) => ai_failures.push((skill_path.clone(), body)),
+                    }
+                }
+            }
+            Err(e) => {
+                // Surface render failures so vale/ai don't silently "pass"
+                // for unrenderable docs; structure layer usually flags the
+                // same frontmatter issue with more detail.
+                all_violations.push(iii_skill_core::structure::Violation {
+                    file: source.display().to_string(),
+                    line: None,
+                    message: format!("render failed (cannot run vale/ai): {e}"),
+                });
             }
         }
     }
@@ -644,21 +804,6 @@ fn resolve_styles_path() -> anyhow::Result<String> {
         .join("styles")
         .to_string_lossy()
         .into_owned())
-}
-
-fn enumerate_rendered_artifacts(worker: &Path) -> Vec<PathBuf> {
-    let mut out = vec![worker.join("README.md"), worker.join("skill.md")];
-    let skills = worker.join("skills");
-    if let Ok(entries) = std::fs::read_dir(&skills) {
-        let mut leaf_paths: Vec<PathBuf> = entries
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("md"))
-            .collect();
-        leaf_paths.sort();
-        out.extend(leaf_paths);
-    }
-    out
 }
 
 /// Concatenate `content/project-rules/*.md` (the always-on rules), plus

@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 /// from the file to find the controlling `.skill-check.yaml` and renders
 /// just that doc.
 #[derive(Parser)]
-#[command(name = "iii-skill-render", about, long_about = None)]
+#[command(name = "iii-skill-render", version = iii_skill_core::update_check::installed_version(), about, long_about = None)]
 struct Cli {
     /// Worker dir, docs root, or single doc file.
     target: PathBuf,

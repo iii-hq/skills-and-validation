@@ -71,8 +71,32 @@ pub fn check_artifact(
 ) -> anyhow::Result<Result<(), String>> {
     let artifact_text = std::fs::read_to_string(artifact)
         .with_context(|| format!("reading {}", artifact.display()))?;
-    let path_str = artifact.display().to_string();
-    let user_prompt = build_user_prompt(rules, &path_str, &artifact_text);
+    check_artifact_text(
+        &artifact_text,
+        artifact,
+        rules,
+        system_prompt,
+        model,
+        api_key_env_var,
+        max_tokens,
+    )
+}
+
+/// Same as [`check_artifact`] but takes the artifact text in memory.
+/// Used when `verify` renders the skill artifact lazily and doesn't write
+/// it to disk first. `display_path` is the canonical path shown in the
+/// prompt so the model sees the artifact's real location, not a temp dir.
+pub fn check_artifact_text(
+    artifact_text: &str,
+    display_path: &Path,
+    rules: &str,
+    system_prompt: &str,
+    model: &str,
+    api_key_env_var: &str,
+    max_tokens: u32,
+) -> anyhow::Result<Result<(), String>> {
+    let path_str = display_path.display().to_string();
+    let user_prompt = build_user_prompt(rules, &path_str, artifact_text);
     call_anthropic(system_prompt, &user_prompt, model, api_key_env_var, max_tokens)
 }
 
@@ -90,8 +114,32 @@ pub fn check_artifact_with_type(
 ) -> anyhow::Result<Result<(), String>> {
     let artifact_text = std::fs::read_to_string(artifact)
         .with_context(|| format!("reading {}", artifact.display()))?;
-    let path_str = artifact.display().to_string();
-    let user_prompt = build_user_prompt_with_type(rules, doc_type, &path_str, &artifact_text);
+    check_artifact_text_with_type(
+        &artifact_text,
+        artifact,
+        rules,
+        system_prompt,
+        doc_type,
+        model,
+        api_key_env_var,
+        max_tokens,
+    )
+}
+
+/// In-memory variant of [`check_artifact_with_type`]. See
+/// [`check_artifact_text`] for the rationale.
+pub fn check_artifact_text_with_type(
+    artifact_text: &str,
+    display_path: &Path,
+    rules: &str,
+    system_prompt: &str,
+    doc_type: crate::docs::frontmatter::DocType,
+    model: &str,
+    api_key_env_var: &str,
+    max_tokens: u32,
+) -> anyhow::Result<Result<(), String>> {
+    let path_str = display_path.display().to_string();
+    let user_prompt = build_user_prompt_with_type(rules, doc_type, &path_str, artifact_text);
     call_anthropic(system_prompt, &user_prompt, model, api_key_env_var, max_tokens)
 }
 
