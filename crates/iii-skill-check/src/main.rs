@@ -275,11 +275,11 @@ fn verify_worker(
     let rendered = match iii_skill_core::render::render_worker(worker) {
         Ok(r) => r,
         Err(e) => {
-            all_violations.push(iii_skill_core::structure::Violation {
-                file: worker.display().to_string(),
-                line: None,
-                message: format!("render failed (cannot run vale/ai): {e}"),
-            });
+            all_violations.push(iii_skill_core::structure::Violation::error(
+                worker.display().to_string(),
+                None,
+                format!("render failed (cannot run vale/ai): {e}"),
+            ));
             return report(&all_violations, &ai_failures, layers, &worker.display().to_string());
         }
     };
@@ -426,11 +426,11 @@ fn verify_docs(
                 // Surface render failures so vale/ai don't silently
                 // "pass" for unrenderable docs; structure layer often
                 // flags the same frontmatter issue with more detail.
-                all_violations.push(iii_skill_core::structure::Violation {
-                    file: doc.rel.clone(),
-                    line: None,
-                    message: format!("render failed (cannot run vale/ai): {e}"),
-                });
+                all_violations.push(iii_skill_core::structure::Violation::error(
+                    doc.rel.clone(),
+                    None,
+                    format!("render failed (cannot run vale/ai): {e}"),
+                ));
                 continue;
             }
         };
@@ -593,11 +593,11 @@ fn verify_doc_file(
                 // Surface render failures so vale/ai don't silently "pass"
                 // for unrenderable docs; structure layer usually flags the
                 // same frontmatter issue with more detail.
-                all_violations.push(iii_skill_core::structure::Violation {
-                    file: source.display().to_string(),
-                    line: None,
-                    message: format!("render failed (cannot run vale/ai): {e}"),
-                });
+                all_violations.push(iii_skill_core::structure::Violation::error(
+                    source.display().to_string(),
+                    None,
+                    format!("render failed (cannot run vale/ai): {e}"),
+                ));
             }
         }
     }
@@ -679,13 +679,13 @@ fn check_file(
             .filter(|l| iii_skill_core::llm_only::is_llm_only_end(l))
             .count();
         if starts != ends {
-            all_violations.push(iii_skill_core::structure::Violation {
-                file: target.display().to_string(),
-                line: None,
-                message: format!(
+            all_violations.push(iii_skill_core::structure::Violation::error(
+                target.display().to_string(),
+                None,
+                format!(
                     "unbalanced llm-only blocks: {starts} start markers, {ends} end markers"
                 ),
-            });
+            ));
         }
     }
 
@@ -729,10 +729,19 @@ fn report(
     layers: &str,
     target_label: &str,
 ) -> anyhow::Result<()> {
+    use iii_skill_core::structure::Severity;
+
+    // Emit one line per violation. Severity is encoded between the
+    // line number and the message so scripts/annotate.sh and
+    // scripts/summary.sh can route warnings to `::warning::` and keep
+    // them out of the error count.
+    //
+    // Line format: `<file>:<line>:<severity> — <message>` (or
+    // `<file>::<severity> — <message>` when no line is available).
     if !violations.is_empty() {
         for v in violations {
             let line = v.line.map(|l| format!(":{l}")).unwrap_or_default();
-            eprintln!("{}{} — {}", v.file, line, v.message);
+            eprintln!("{}{}:{} — {}", v.file, line, v.severity.label(), v.message);
         }
     }
     if !ai_failures.is_empty() {
@@ -741,11 +750,33 @@ fn report(
         }
     }
 
-    let total = violations.len() + ai_failures.len();
-    if total > 0 {
-        anyhow::bail!("{total} violation(s) across layers [{layers}]");
+    let error_count = violations
+        .iter()
+        .filter(|v| v.severity == Severity::Error)
+        .count()
+        + ai_failures.len();
+    let warning_count = violations
+        .iter()
+        .filter(|v| v.severity == Severity::Warning)
+        .count();
+
+    if error_count > 0 {
+        let mut msg =
+            format!("{error_count} error(s) across layers [{layers}]");
+        if warning_count > 0 {
+            msg.push_str(&format!(", {warning_count} warning(s)"));
+        }
+        anyhow::bail!(msg);
     }
-    println!("verify clean across [{layers}] for {target_label}");
+    if warning_count > 0 {
+        // Warnings without errors: surface a clear non-fatal line and
+        // exit 0 so CI keeps going.
+        println!(
+            "verify clean across [{layers}] for {target_label} ({warning_count} warning(s))"
+        );
+    } else {
+        println!("verify clean across [{layers}] for {target_label}");
+    }
     Ok(())
 }
 

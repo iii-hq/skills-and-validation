@@ -42,7 +42,9 @@ Re-renders the worker in memory and diffs against the on-disk `README.md`, `skil
 
 ## Reading violations
 
-Output format is `<file>:<line>: <message>`. Structure and Vale layers report inline; AI failures appear under `[AI] <path>` blocks at the end with the model's full violation list.
+Output format is `<file>:<line>:<severity> — <message>`, where `severity` is `error` or `warning`. Errors fail the run; warnings surface in the same channels but exit code stays 0 when only warnings are present. Structure and Vale layers report inline; AI failures appear under `[AI] <path>` blocks at the end with the model's full violation list.
+
+Vale's per-rule `level` decides severity. Most rules in `styles/Terminology/` use `level: error` (slop, em-dash, forbidden terms). The Diataxis quadrant drift rules use `level: warning` so writers see the drift without the build going red.
 
 ## Wire into CI
 

@@ -13,7 +13,12 @@ set -euo pipefail
 input="${1:?missing log-file arg}"
 MODE_LABEL="${2:-}"
 
-violations=$(grep -cE '^[^[:space:]][^:]+:[0-9]+ — ' "$input" || true)
+# Violation lines are `<path>:<line>:<severity> — <message>` with
+# severity ∈ {error, warning}. Count each separately so warnings can
+# surface without dragging the overall status into "failed".
+errors=$(grep -cE '^[^[:space:]][^:]+:[0-9]+:error — ' "$input" || true)
+warnings=$(grep -cE '^[^[:space:]][^:]+:[0-9]+:warning — ' "$input" || true)
+total=$((errors + warnings))
 counts=$(grep -E '^[0-9]+ verified, [0-9]+ skipped' "$input" | tail -1 || true)
 layers=$(grep -E '^layers ran:' "$input" | tail -1 | sed -E 's/^layers ran: *//' || true)
 
@@ -28,7 +33,7 @@ if [ -n "$counts" ]; then
   echo
 fi
 
-if [ "$violations" -eq 0 ]; then
+if [ "$total" -eq 0 ]; then
   # Per-layer checklist (whichever layers actually ran)
   layer_count=0
   if [ -n "$layers" ]; then
@@ -54,15 +59,26 @@ if [ "$violations" -eq 0 ]; then
   exit 0
 fi
 
-echo "$violations violation$([ "$violations" -eq 1 ] || echo s) across the verified workers."
+# Headline: errors first (they fail the run), warnings as context.
+header_parts=()
+if [ "$errors" -gt 0 ]; then
+  header_parts+=("$errors error$([ "$errors" -eq 1 ] || echo s)")
+fi
+if [ "$warnings" -gt 0 ]; then
+  header_parts+=("$warnings warning$([ "$warnings" -eq 1 ] || echo s)")
+fi
+header=$(IFS=', '; echo "${header_parts[*]}")
+echo "$header across the verified workers."
 echo
-echo "| File | Line | Violation |"
-echo "| --- | --- | --- |"
-grep -E '^[^[:space:]][^:]+:[0-9]+ — ' "$input" | while IFS= read -r line; do
+echo "| File | Line | Severity | Violation |"
+echo "| --- | --- | --- | --- |"
+grep -E '^[^[:space:]][^:]+:[0-9]+:(error|warning) — ' "$input" | while IFS= read -r line; do
   head="${line%% — *}"
   msg="${line#* — }"
-  path="${head%:*}"
-  lineno="${head##*:}"
+  severity="${head##*:}"
+  rest="${head%:*}"
+  path="${rest%:*}"
+  lineno="${rest##*:}"
   msg_escaped="${msg//|/\\|}"
-  printf '| `%s` | %s | %s |\n' "$path" "$lineno" "$msg_escaped"
+  printf '| `%s` | %s | %s | %s |\n' "$path" "$lineno" "$severity" "$msg_escaped"
 done

@@ -43,7 +43,7 @@ Re-render with `iii-skill-render <docs-root> --write` and commit the result.
 
 ## Reading violations
 
-Each layer emits one line per finding in the format `path:line: message`. The CI action turns these into:
+Each layer emits one line per finding in the format `path:line:severity — message`, where `severity` is `error` or `warning`. Errors fail the run; warnings surface in the same output but the exit code stays 0 when only warnings are present. The CI action turns these into:
 
 - inline annotations on the PR's "Files changed" tab (always on)
 - a markdown table in the run summary (always on)

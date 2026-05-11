@@ -2,11 +2,63 @@ use anyhow::Context;
 use std::collections::HashSet;
 use std::path::Path;
 
+/// Severity of a single violation. `Error` fails the run; `Warning` is
+/// surfaced through the same channels but does not affect exit code.
+/// Defaults to `Error` so existing call sites that don't set the field
+/// preserve current behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Severity {
+    #[default]
+    Error,
+    Warning,
+}
+
+impl Severity {
+    /// Human-readable lowercase label used in CLI output and matched by
+    /// the annotation/summary scripts.
+    pub fn label(self) -> &'static str {
+        match self {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Violation {
     pub file: String,
     pub line: Option<usize>,
     pub message: String,
+    pub severity: Severity,
+}
+
+impl Violation {
+    /// Construct an error-severity violation. Most call sites should
+    /// use this constructor; reserve direct struct-literal construction
+    /// for code that needs to vary severity programmatically.
+    pub fn error(file: impl Into<String>, line: Option<usize>, message: impl Into<String>) -> Self {
+        Self {
+            file: file.into(),
+            line,
+            message: message.into(),
+            severity: Severity::Error,
+        }
+    }
+
+    /// Construct a warning-severity violation. Warnings surface in the
+    /// same output channels as errors but do not fail the run.
+    pub fn warning(
+        file: impl Into<String>,
+        line: Option<usize>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            file: file.into(),
+            line,
+            message: message.into(),
+            severity: Severity::Warning,
+        }
+    }
 }
 
 /// Run Layer 1 deterministic structure checks against a worker dir.
@@ -58,21 +110,21 @@ fn check_required_sections(readme: &str) -> Vec<Violation> {
             Some(pos) => {
                 if let Some(prev) = last_pos {
                     if pos < prev {
-                        violations.push(Violation {
-                            file: "README.md".to_string(),
-                            line: None,
-                            message: format!("section {header} appears out of expected order"),
-                        });
+                        violations.push(Violation::error(
+                            "README.md",
+                            None,
+                            format!("section {header} appears out of expected order"),
+                        ));
                     }
                 }
                 last_pos = Some(pos);
             }
             None => {
-                violations.push(Violation {
-                    file: "README.md".to_string(),
-                    line: None,
-                    message: format!("missing required section {header}"),
-                });
+                violations.push(Violation::error(
+                    "README.md",
+                    None,
+                    format!("missing required section {header}"),
+                ));
             }
         }
     }
@@ -84,13 +136,11 @@ fn check_install_line(readme: &str, name: &str) -> Vec<Violation> {
     if readme.contains(&expected) {
         return Vec::new();
     }
-    vec![Violation {
-        file: "README.md".to_string(),
-        line: None,
-        message: format!(
-            "install command should be `{expected}` matching iii.worker.yaml.name"
-        ),
-    }]
+    vec![Violation::error(
+        "README.md",
+        None,
+        format!("install command should be `{expected}` matching iii.worker.yaml.name"),
+    )]
 }
 
 fn check_forbidden_install_patterns(readme: &str, name: &str) -> Vec<Violation> {
@@ -107,13 +157,13 @@ fn check_forbidden_install_patterns(readme: &str, name: &str) -> Vec<Violation> 
     for (i, line) in readme.lines().enumerate() {
         let lower = line.to_lowercase();
         if let Some(needle) = blocked.iter().find(|n| lower.contains(&n.to_lowercase())) {
-            violations.push(Violation {
-                file: "README.md".to_string(),
-                line: Some(i + 1),
-                message: format!(
+            violations.push(Violation::error(
+                "README.md",
+                Some(i + 1),
+                format!(
                     "forbidden pattern `{needle}` in published README (binary verification or source-build steps belong in contributor docs, not the published README)"
                 ),
-            });
+            ));
         }
     }
     violations
@@ -134,13 +184,11 @@ fn check_llm_only_balance(label: &str, content: &str) -> Vec<Violation> {
     if starts == ends {
         return Vec::new();
     }
-    vec![Violation {
-        file: label.to_string(),
-        line: None,
-        message: format!(
-            "unbalanced llm-only blocks: {starts} start markers, {ends} end markers"
-        ),
-    }]
+    vec![Violation::error(
+        label,
+        None,
+        format!("unbalanced llm-only blocks: {starts} start markers, {ends} end markers"),
+    )]
 }
 
 fn check_iii_links(
@@ -161,13 +209,13 @@ fn check_iii_links(
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '/')
                 .collect();
             if !leaf.is_empty() && !known_leaves.contains(&leaf) {
-                violations.push(Violation {
-                    file: label.to_string(),
-                    line: Some(i + 1),
-                    message: format!(
+                violations.push(Violation::error(
+                    label,
+                    Some(i + 1),
+                    format!(
                         "iii://{worker_name}/{leaf} points to a leaf that is not registered (no skills/{leaf}.md)"
                     ),
-                });
+                ));
             }
             start = abs + prefix.len();
         }

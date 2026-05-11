@@ -21,21 +21,21 @@ pub fn check_source(path: &Path) -> Vec<Violation> {
     let content = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
-            violations.push(Violation {
-                file: rel,
-                line: None,
-                message: format!("could not read source: {e}"),
-            });
+            violations.push(Violation::error(
+                rel,
+                None,
+                format!("could not read source: {e}"),
+            ));
             return violations;
         }
     };
 
     if let Err(e) = parse(&content) {
-        violations.push(Violation {
-            file: rel.clone(),
-            line: None,
-            message: format!("frontmatter is missing or invalid: {e}"),
-        });
+        violations.push(Violation::error(
+            rel.clone(),
+            None,
+            format!("frontmatter is missing or invalid: {e}"),
+        ));
         // Without frontmatter we still want to keep checking the body
         // markers, so fall through.
     }
@@ -60,13 +60,11 @@ fn check_llm_only_balance(file: &str, content: &str) -> Vec<Violation> {
     if starts == ends {
         return Vec::new();
     }
-    vec![Violation {
-        file: file.to_string(),
-        line: None,
-        message: format!(
-            "unbalanced llm-only blocks: {starts} start markers, {ends} end markers"
-        ),
-    }]
+    vec![Violation::error(
+        file,
+        None,
+        format!("unbalanced llm-only blocks: {starts} start markers, {ends} end markers"),
+    )]
 }
 
 fn check_conflicting_doc_scope(file: &str, content: &str) -> Vec<Violation> {
@@ -81,13 +79,11 @@ fn check_conflicting_doc_scope(file: &str, content: &str) -> Vec<Violation> {
         }
     }
     if has_include && has_exclude {
-        return vec![Violation {
-            file: file.to_string(),
-            line: None,
-            message:
-                "doc declares both `skill:include-doc` and `skill:exclude-doc`: pick one"
-                    .to_string(),
-        }];
+        return vec![Violation::error(
+            file,
+            None,
+            "doc declares both `skill:include-doc` and `skill:exclude-doc`: pick one",
+        )];
     }
     Vec::new()
 }

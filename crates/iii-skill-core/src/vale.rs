@@ -54,10 +54,18 @@ pub fn run(
     let mut violations = Vec::new();
     for (file, file_alerts) in alerts {
         for a in file_alerts {
+            // Map Vale's per-rule `level` into our binary severity:
+            // `error` stays Error; `warning` and `suggestion` downgrade
+            // to Warning so they surface without failing the run.
+            let severity = match a.severity.to_lowercase().as_str() {
+                "warning" | "suggestion" => crate::structure::Severity::Warning,
+                _ => crate::structure::Severity::Error,
+            };
             violations.push(crate::structure::Violation {
                 file: file.clone(),
                 line: Some(a.line),
                 message: format!("[{}] {} ({})", a.check, a.message, a.severity),
+                severity,
             });
         }
     }
