@@ -53,8 +53,13 @@ verified=0
 skipped=0
 for manifest in $WORKERS_GLOB; do
   dir="$(dirname "$manifest")"
-  if [ ! -d "$dir/docs" ]; then
-    echo "::notice::skipping $dir (no docs/ partials yet)"
+  # `docs/intro.md` is the minimum required partial for the renderer.
+  # A worker that ships only skill bundles or hand-authored docs (e.g.
+  # `harness/docs/iii-skill.md`) without `docs/intro.md` has opted out
+  # of the rendered-partials pattern — skip it rather than fail to
+  # render.
+  if [ ! -f "$dir/docs/intro.md" ]; then
+    echo "::notice::skipping $dir (no docs/intro.md — worker isn't using the renderer)"
     skipped=$((skipped + 1))
     continue
   fi

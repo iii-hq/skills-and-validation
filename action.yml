@@ -146,7 +146,11 @@ runs:
         else
           for manifest in ${{ inputs.workers-glob }}; do
             dir="$(dirname "$manifest")"
-            [ -d "$dir/docs" ] || continue
+            # Skip workers that aren't using the renderer's partials
+            # pattern. `docs/intro.md` is the minimum required partial; a
+            # worker that ships only `docs/<other>.md` (skill bundles,
+            # standalone notes) hand-authors its README instead.
+            [ -f "$dir/docs/intro.md" ] || continue
             if out=$("$bin" "$dir" --write 2>&1); then
               printf '%s\n' "$out"
             else
@@ -173,7 +177,11 @@ runs:
         else
           for manifest in ${{ inputs.workers-glob }}; do
             dir="$(dirname "$manifest")"
-            [ -d "$dir/docs" ] || continue
+            # Skip workers that aren't using the renderer's partials
+            # pattern. `docs/intro.md` is the minimum required partial; a
+            # worker that ships only `docs/<other>.md` (skill bundles,
+            # standalone notes) hand-authors its README instead.
+            [ -f "$dir/docs/intro.md" ] || continue
             drift_paths+=" $dir/README.md $dir/skill.md $dir/skills"
           done
         fi
@@ -272,7 +280,11 @@ runs:
         else
           for manifest in ${{ inputs.workers-glob }}; do
             dir="$(dirname "$manifest")"
-            [ -d "$dir/docs" ] || continue
+            # Skip workers that aren't using the renderer's partials
+            # pattern. `docs/intro.md` is the minimum required partial; a
+            # worker that ships only `docs/<other>.md` (skill bundles,
+            # standalone notes) hand-authors its README instead.
+            [ -f "$dir/docs/intro.md" ] || continue
             git add "$dir/README.md" "$dir/skill.md" 2>/dev/null || true
             git add -A "$dir/skills/" 2>/dev/null || true
           done
