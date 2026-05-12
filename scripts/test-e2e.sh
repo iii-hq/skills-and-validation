@@ -86,6 +86,13 @@ cleanup() {
   if [ "$KEEP_TMP" -eq 0 ]; then
     rm -rf "$PKG_DIR" "$TARBALL" "$INSTALL_DIR" "$STRIP_LOG"
   fi
+  # Phases B and D both `--write` rendered artifacts into the in-tree
+  # templates/example-worker (the binary regenerates them; they're not
+  # checked in). Strip them on exit so a subsequent `cargo test` won't
+  # trip `templates_dir_ships_no_rendered_artifacts`.
+  rm -f "$REPO_ROOT/templates/example-worker/README.md" \
+        "$REPO_ROOT/templates/example-worker/skill.md"
+  rm -rf "$REPO_ROOT/templates/example-worker/skills"
 }
 trap cleanup EXIT
 
@@ -242,6 +249,13 @@ echo "+ extract to $INSTALL_DIR"
 rm -rf "$INSTALL_DIR" && mkdir -p "$INSTALL_DIR"
 tar -xzf "$TARBALL" -C "$INSTALL_DIR" --strip-components=1
 
+# Phase C's AI tests use RenderedTemplate, which cleans up the rendered
+# files in templates/example-worker on Drop. Re-render with the extracted
+# binary so verify-rendered has something to compare against and we
+# actually exercise the released binary's render path.
+echo "+ extracted iii-skill-render templates/example-worker --write"
+"$INSTALL_DIR/bin/iii-skill-render" templates/example-worker --write
+
 echo "+ extracted iii-skill-check verify-rendered"
 "$INSTALL_DIR/bin/iii-skill-check" verify-rendered templates/example-worker
 
@@ -249,20 +263,29 @@ echo "+ extracted iii-skill-check verify --layers structure,vale"
 "$INSTALL_DIR/bin/iii-skill-check" verify templates/example-worker --layers structure,vale
 
 # ----------------------------------------------------------------------
-phase E "scripts/verify.sh against the extracted bundle"
+phase E "scripts/verify-workers.sh against the extracted bundle"
 # ----------------------------------------------------------------------
-echo "+ verify.sh structure,vale"
-( cd fixtures
-  INSTALL_DIR="$INSTALL_DIR" "$REPO_ROOT/scripts/verify.sh" "*/iii.worker.yaml" "structure,vale" )
+# fixtures/ intentionally ships broken-worker / bad-concept-worker / etc.
+# so a clean verify pass against the whole directory isn't the goal;
+# we're testing that the wrapper script can drive the extracted binary
+# at all, find the bundle, and produce the per-worker grouped output.
+# A non-zero overall exit is expected (broken-worker fails by design).
+echo "+ verify-workers.sh structure,vale (expect non-zero exit; broken fixtures fail by design)"
+if ( cd fixtures
+     INSTALL_DIR="$INSTALL_DIR" "$REPO_ROOT/scripts/verify-workers.sh" "*/iii.worker.yaml" "structure,vale" ); then
+  echo "ERROR: verify-workers.sh exited 0 against fixtures/ (broken-worker must fail)" >&2
+  exit 1
+fi
+echo "  (verify-workers.sh exited non-zero as expected)"
 
-echo "+ verify.sh structure,vale,ai with no API key (should auto-strip ai)"
-# verify.sh's auto-strip checks the env-var name the consumer's config
+echo "+ verify-workers.sh structure,vale,ai with no API key (should auto-strip ai)"
+# verify-workers.sh's auto-strip checks the env-var name the consumer's config
 # specifies; we read the same name here so the test matches whatever
 # templates/.skill-check.yaml currently declares.
 (
   cd fixtures
   unset "$KEY_VAR"
-  INSTALL_DIR="$INSTALL_DIR" "$REPO_ROOT/scripts/verify.sh" "*/iii.worker.yaml" "structure,vale,ai"
+  INSTALL_DIR="$INSTALL_DIR" "$REPO_ROOT/scripts/verify-workers.sh" "*/iii.worker.yaml" "structure,vale,ai" || true
 ) | tee "$STRIP_LOG"
 if ! grep -q "$KEY_VAR not set" "$STRIP_LOG"; then
   echo "ERROR: expected the ai-strip warning ($KEY_VAR not set), did not see it" >&2
