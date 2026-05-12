@@ -2,8 +2,8 @@
 
 Render and validate skill artifacts against project-wide voice, structure, and Diataxis rules. Two modes:
 
-- **Worker mode** — partials under `<worker>/docs/` render into `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`. The original surface; v1 schemas land here implicitly.
-- **Docs mode** — Mintlify-shaped `.md` / `.mdx` sources each render into a sibling `<source>.skill.md`. Heading-level inclusion + per-doc opt-in/out via HTML-comment markers; per-type Vale rules driven by frontmatter `type:`. Opt in by setting `version: 2` and `mode: docs` in `.skill-check.yaml`.
+- **Worker mode**: partials under `<worker>/docs/` render into `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`. The original surface; v1 schemas land here implicitly.
+- **Docs mode**: Mintlify-shaped `.md` / `.mdx` sources each render into a sibling `<source>.skill.md`. Heading-level inclusion + per-doc opt-in/out via HTML-comment markers; per-type Vale rules driven by frontmatter `type:`. Opt in by setting `version: 2` and `mode: docs` in `.skill-check.yaml`.
 
 Ships two binaries and a composite GitHub Action. Consumers pin a `version` in `.skill-check.yaml`; the action and the pre-commit hook download a matching release tarball.
 
@@ -40,8 +40,8 @@ The pinned Vale version we test against is in `.github/workflows/dogfood.yml` (`
 
 Two bundles ship from `content/skills/`:
 
-- **`iii-skill-authoring`** — for authoring iii worker partials. Directory layout, renderer slots, voice rules, per-function leaves, llm-only round-trip, running `iii-skill-check` against a worker. Use when you're writing the partials a worker's docs render from.
-- **`iii-doc-authoring`** — for authoring Mintlify-shaped `.md` / `.mdx` docs that the docs-mode pipeline validates. Frontmatter shape, Diataxis types, the `<!-- skill:... -->` marker reference, the per-quadrant writing guides under `iii-doc-authoring/diataxis/`. Use when you're writing standalone documentation outside a worker.
+- **`iii-skill-authoring`**: for authoring iii worker partials. Directory layout, renderer slots, voice rules, per-function leaves, llm-only round-trip, running `iii-skill-check` against a worker. Use when you're writing the partials a worker's docs render from.
+- **`iii-doc-authoring`**: for authoring Mintlify-shaped `.md` / `.mdx` docs that the docs-mode pipeline validates. Frontmatter shape, Diataxis types, the `<!-- skill:... -->` marker reference, the per-quadrant writing guides under `iii-doc-authoring/diataxis/`. Use when you're writing standalone documentation outside a worker.
 
 Pick the surface that fits your tooling:
 
@@ -60,7 +60,7 @@ skills:
   - ~/.local/share/skill-check/current/content/skills/iii-doc-authoring/**/*.md
 ```
 
-Browse topics with `skillkit read iii-skill-authoring/<topic>` or `skillkit read iii-doc-authoring/<topic>`. The worker bundle covers `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`. The docs bundle covers `quickstart`, `frontmatter`, `types`, `markers`, `voice`, `llm-only-blocks`, `check`, plus the `diataxis/` writing guides — `doc_workflow`, `doc_tutorial`, `doc_howto`, `doc_reference`, and `doc_explanation`.
+Browse topics with `skillkit read iii-skill-authoring/<topic>` or `skillkit read iii-doc-authoring/<topic>`. The worker bundle covers `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`. The docs bundle covers `quickstart`, `frontmatter`, `types`, `markers`, `voice`, `llm-only-blocks`, `check`, plus the `diataxis/` writing guides: `doc_workflow`, `doc_tutorial`, `doc_howto`, `doc_reference`, and `doc_explanation`.
 
 ### 3. Install the binaries
 
@@ -98,7 +98,7 @@ Add `~/.local/bin` to your `PATH` if it isn't already. Override either default w
 
 ### 4. Install the pre-commit hook
 
-The hook installs into whatever git repo you're currently in, so `cd` into the consumer repo first — running the script from somewhere else (including a clone of `skills-and-validation` itself) is almost never what you want, and the script will refuse if it detects it's being run from this repo.
+The hook installs into whatever git repo you're currently in, so `cd` into the consumer repo first. Running the script from somewhere else (including a clone of `skills-and-validation` itself) is almost never what you want, and the script will refuse if it detects it's being run from this repo.
 
 ```bash
 cd /path/to/your/consumer-repo
@@ -113,7 +113,7 @@ The script symlinks `pre-commit-hook.sh` into `.git/hooks/pre-commit`. On every 
 4. Runs `iii-skill-check verify-rendered` + `iii-skill-check verify --layers structure,vale`.
 5. Blocks the commit on remaining violations.
 
-**The hook deliberately skips the AI layer** — it's slow and costs API tokens, so commits stay fast. CI runs the AI layer on every PR.
+**The hook deliberately skips the AI layer**: it's slow and costs API tokens, so commits stay fast. CI runs the AI layer on every PR.
 
 To bypass the hook for a single commit: `git commit --no-verify`.
 
@@ -131,15 +131,15 @@ CI invokes the AI layer automatically. Set `ANTHROPIC_API_KEY` as a repo secret 
 
 ### Upgrading
 
-Re-run `install.sh` whenever a new release lands — the `latest` tag floats to the most recent stable release, so the same one-liner installs the new version and re-points the symlinks.
+Re-run `install.sh` whenever a new release lands. The `latest` tag floats to the most recent stable release, so the same one-liner installs the new version and re-points the symlinks.
 
-Both binaries check at runtime whether a newer release is available (via `https://api.github.com/repos/iii-hq/skills-and-validation/releases/latest`, cached for 24h at `~/.cache/skill-check/update-check.json`). When out of date, the binary prints the install command and exits with code 2 — pass `--allow-old-version` to proceed on the older binary anyway:
+Both binaries check at runtime whether a newer release is available (via `https://api.github.com/repos/iii-hq/skills-and-validation/releases/latest`, cached for 24h at `~/.cache/skill-check/update-check.json`). When out of date, the binary prints the install command and exits with code 2. Pass `--allow-old-version` to proceed on the older binary anyway:
 
 ```bash
 iii-skill-check verify <worker> --allow-old-version
 ```
 
-To suppress the check entirely (offline runs, CI environments, scripted batch invocations), set `SKV_NO_UPDATE_CHECK=1`. The composite action and `scripts/test-e2e.sh` set this automatically — only interactive local runs hit the API.
+To suppress the check entirely (offline runs, CI environments, scripted batch invocations), set `SKV_NO_UPDATE_CHECK=1`. The composite action and `scripts/test-e2e.sh` set this automatically; only interactive local runs hit the API.
 
 ---
 
@@ -177,7 +177,7 @@ See `templates/.skill-check.yaml` for an example file.
 | `rules.path`               | no       | Local override for `project-rules/`. Omit to use the rules bundled with the released validator.                                                         |
 | `styles.path`              | no       | Local override for the Vale `styles/` dir. Omit to use the bundled styles.                                                                              |
 
-Pin the release in your workflow file via `uses: iii-hq/skills-and-validation@v0.1` (floats to the latest 0.1.x patch) or `@v0.1.5` (exact). Bump `version` only when the schema itself changes — most consumers leave it alone.
+Pin the release in your workflow file via `uses: iii-hq/skills-and-validation@v0.1` (floats to the latest 0.1.x patch) or `@v0.1.5` (exact). Bump `version` only when the schema itself changes; most consumers leave it alone.
 
 ### Modes
 
@@ -250,7 +250,7 @@ The full authoring guide is in `content/skills/iii-doc-authoring/`. Browse via `
 
 ## LLM-only blocks
 
-Mark spans visible in skill artifacts (`skill.md`, `skills/*.md`, `<source>.skill.md`) but hidden from the rendered README. Applies in both worker `docs/` partials and docs-mode sources. README rendering passes the source through unchanged — the comment stays invisible to humans. Skill rendering strips block markers and expands the inline form to its inner text.
+Mark spans visible in skill artifacts (`skill.md`, `skills/*.md`, `<source>.skill.md`) but hidden from the rendered README. Applies in both worker `docs/` partials and docs-mode sources. README rendering passes the source through unchanged, so the comment stays invisible to humans. Skill rendering strips block markers and expands the inline form to its inner text.
 
 Two shapes, two comment forms each:
 
@@ -259,9 +259,9 @@ Two shapes, two comment forms each:
 | Block  | `<!-- llm-only:start -->` … `<!-- llm-only:end -->`  | `{/* llm-only:start */}` … `{/* llm-only:end */}`     |
 | Inline | `<!-- llm-only: short note -->`                      | `{/* llm-only: short note */}`                        |
 
-Use the HTML form in `.md` sources. Use the MDX form in `.mdx` sources — Mintlify strips HTML comments at publish time, so only `{/* … */}` survives into published docs.
+Use the HTML form in `.md` sources. Use the MDX form in `.mdx` sources, because Mintlify strips HTML comments at publish time, so only `{/* … */}` survives into published docs.
 
-Block form — prose the human-facing README should never show:
+Block form, for prose the human-facing README should never show:
 
 ```markdown
 ## Setup
@@ -275,7 +275,7 @@ Prefer `get` over `set` for read-only flows; `set` invalidates the cache.
 
 In the README the block is invisible (HTML comments don't render). In the skill artifact both marker lines are dropped and the inner prose appears as a normal paragraph.
 
-Inline form — the comment is replaced by its payload in the skill artifact, leaving the README unchanged:
+Inline form, where the comment is replaced by its payload in the skill artifact, leaving the README unchanged:
 
 ```markdown
 The worker exposes `set_token`. <!-- llm-only: call this before any other op; tokens cache for 60s -->
@@ -330,14 +330,14 @@ Three layers of feedback, all driven by the validator's existing per-violation o
 | Run summary (Checks tab)        | none (always-on)       | markdown table of every violation with a `Severity` column + `N verified, M skipped`                               |
 | Sticky PR comment               | `pull-requests: write` | same markdown table, headlined `N errors, M warnings across the verified workers.`, updated in place on each push  |
 
-Annotations and step summary are processed by the runner itself — no token, no API call, no opt-in. The PR-comment step uses the consumer's default `GITHUB_TOKEN` and runs only on `pull_request` events; without `pull-requests: write` it no-ops via `continue-on-error: true` rather than failing the run.
+Annotations and step summary are processed by the runner itself: no token, no API call, no opt-in. The PR-comment step uses the consumer's default `GITHUB_TOKEN` and runs only on `pull_request` events; without `pull-requests: write` it no-ops via `continue-on-error: true` rather than failing the run.
 
 #### Severity: errors vs warnings
 
 Each violation carries a severity that determines whether it blocks the build:
 
-- **Error** — fails the run (exit non-zero). Renders as a red `::error` annotation. Used for: structure violations, AI failures, and Vale rules with `level: error` (the `Terminology.*` slop lists, em-dash, forbidden terms).
-- **Warning** — surfaces in the same channels but does not fail the run (exit 0 when only warnings are present). Renders as a yellow `::warning` annotation. Used for: Vale rules with `level: warning` or `level: suggestion` (most `Diataxis.*` quadrant-drift rules).
+- **Error**: fails the run (exit non-zero). Renders as a red `::error` annotation. Used for: structure violations, AI failures, and Vale rules with `level: error` (the `Terminology.*` slop lists, em-dash, forbidden terms).
+- **Warning**: surfaces in the same channels but does not fail the run (exit 0 when only warnings are present). Renders as a yellow `::warning` annotation. Used for: Vale rules with `level: warning` or `level: suggestion` (most `Diataxis.*` quadrant-drift rules).
 
 When only warnings fire, the run prints `verify clean across [layers] for <target> (N warning(s))` and exits 0. The AI layer is currently error-only ([#6](https://github.com/iii-hq/skills-and-validation/issues/6) tracks adding warning support).
 
@@ -366,7 +366,7 @@ The action auto-detects the mode by reading the `.skill-check.yaml` named by `co
 
 #### Validating both modes in one repo (matrix)
 
-Repos that mix worker dirs and docs run the action multiple times via a matrix strategy — one entry per controlling config. The sticky PR comment is keyed off `config-path`, so each matrix run gets its own comment instead of clobbering the previous one.
+Repos that mix worker dirs and docs run the action multiple times via a matrix strategy, with one entry per controlling config. The sticky PR comment is keyed off `config-path`, so each matrix run gets its own comment instead of clobbering the previous one.
 
 ```yaml
 jobs:
@@ -391,13 +391,13 @@ Each matrix entry produces an independent status check, so branch-protection rul
 
 ### Render-then-verify ordering
 
-The action always re-renders worker docs in the CI workspace *before* running `verify`. Without this, an out-of-sync `README.md` could mask voice or structure violations that exist in `docs/` but haven't been propagated to the rendered artifacts yet — verify would happily pass on the stale README while real errors sat unflagged in `docs/intro.md`. Rendering first means verify always operates on artifacts that reflect the current `docs/` content.
+The action always re-renders worker docs in the CI workspace *before* running `verify`. Without this, an out-of-sync `README.md` could mask voice or structure violations that exist in `docs/` but haven't been propagated to the rendered artifacts yet, so verify would happily pass on the stale README while real errors sat unflagged in `docs/intro.md`. Rendering first means verify always operates on artifacts that reflect the current `docs/` content.
 
-This is independent of `write:` — the in-tree render runs in both modes. What `write` controls is whether the rendered diff gets committed back to the PR branch.
+This is independent of `write:`. The in-tree render runs in both modes. What `write` controls is whether the rendered diff gets committed back to the PR branch.
 
 ### Auto-fix mode (opt-in)
 
-With `write: true` plus `contents: write`, the action commits the rendered diff back to the PR branch — but only when `verify` passed first. The bot never pushes content the action hasn't validated, so a `chore: auto-render worker docs` commit on the branch is always known-good output.
+With `write: true` plus `contents: write`, the action commits the rendered diff back to the PR branch, but only when `verify` passed first. The bot never pushes content the action hasn't validated, so a `chore: auto-render worker docs` commit on the branch is always known-good output.
 
 ```yaml
 permissions:
@@ -419,13 +419,13 @@ jobs:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-The follow-up commit doesn't trigger another workflow run (GitHub's default `GITHUB_TOKEN` doesn't fire downstream `push`/`pull_request` events) — that's fine because the action already validated the content before pushing.
+The follow-up commit doesn't trigger another workflow run (GitHub's default `GITHUB_TOKEN` doesn't fire downstream `push`/`pull_request` events). That's fine because the action already validated the content before pushing.
 
 Forks: write mode only works on PRs opened from the same repository; the consumer's `GITHUB_TOKEN` can't push to a fork. Validation-only mode (`write: false`, the default) works for both. In read-only mode, drift between `docs/` and rendered artifacts is reported as a workflow failure so the consumer knows to re-render locally and push.
 
 #### When the bot auto-commits while you're working
 
-If you push a source change and the bot's `chore: auto-render skill artifacts` commit lands before your next push, your local branch is one commit behind. Plain `git pull --rebase` works as long as your local commits didn't touch the rendered artifacts (`README.md`, `skill.md`, `skills/*.md`, or `*.skill.md`). When they did — typically because you ran the renderer locally before committing — rebase will conflict on those files.
+If you push a source change and the bot's `chore: auto-render skill artifacts` commit lands before your next push, your local branch is one commit behind. Plain `git pull --rebase` works as long as your local commits didn't touch the rendered artifacts (`README.md`, `skill.md`, `skills/*.md`, or `*.skill.md`). When they did (typically because you ran the renderer locally before committing), rebase will conflict on those files.
 
 The safe one-liner is to rebase preferring the upstream side, since the bot's render is authoritative (it ran on the head commit's sources):
 
@@ -440,7 +440,7 @@ git rebase -X ours origin/<branch>
 git pull --no-rebase -X theirs
 ```
 
-Either way, double-check the result with `git diff @{u}..` before pushing — `-X ours`/`-X theirs` is path-blind, so any conflicts in *non*-artifact files would also be silently resolved that way.
+Either way, double-check the result with `git diff @{u}..` before pushing: `-X ours`/`-X theirs` is path-blind, so any conflicts in *non*-artifact files would also be silently resolved that way.
 
 If you'd rather re-render than trust the bot's commit:
 
@@ -486,7 +486,7 @@ Tagging triggers `release.yml` and is effectively irreversible once consumers pi
 `CARGO_MANIFEST_DIR` is baked into the test binary at compile time. After a parent-directory rename, run `cargo clean` to force a rebuild with the new path.
 
 **Vale layer fails with `vale: command not found`.**
-Vale is a hard prerequisite for local runs — see [Setup → 1. Install Vale](#1-install-vale). The composite Action installs it on the runner; locally `brew install vale` or grab a release from https://github.com/errata-ai/vale/releases.
+Vale is a hard prerequisite for local runs; see [Setup → 1. Install Vale](#1-install-vale). The composite Action installs it on the runner; locally `brew install vale` or grab a release from https://github.com/errata-ai/vale/releases.
 
 **`cross install --locked` fails in CI.**
 cross-rs occasionally lags behind cargo updates. Two fallback options:
