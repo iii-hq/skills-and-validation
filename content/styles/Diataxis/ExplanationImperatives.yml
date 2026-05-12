@@ -1,6 +1,6 @@
 extends: existence
-message: "Explanation docs should discuss, not direct. '%s' is imperative—rephrase as discussion."
-level: suggestion
+message: "Explanation docs should discuss, not direct. '%s' is imperative. Rephrase as discussion."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

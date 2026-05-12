@@ -1,6 +1,6 @@
 extends: existence
-message: "Tutorials should minimize explanation. '%s' signals digression—link to Explanation docs instead."
-level: suggestion
+message: "Tutorials should minimize explanation. '%s' signals digression. Link to Explanation docs instead."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

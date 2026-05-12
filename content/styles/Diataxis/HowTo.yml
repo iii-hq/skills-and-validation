@@ -1,6 +1,6 @@
 extends: existence
-message: "How-to guides solve problems, not teach. '%s' is teaching language—remove or rephrase as goal-focused."
-level: warning
+message: "How-to guides solve problems, not teach. '%s' is teaching language. Remove it or rephrase as goal-focused."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

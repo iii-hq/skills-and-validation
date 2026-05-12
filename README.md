@@ -336,8 +336,8 @@ Annotations and step summary are processed by the runner itself: no token, no AP
 
 Each violation carries a severity that determines whether it blocks the build:
 
-- **Error**: fails the run (exit non-zero). Renders as a red `::error` annotation. Used for: structure violations, AI failures, and Vale rules with `level: error` (the `Terminology.*` slop lists, em-dash, forbidden terms).
-- **Warning**: surfaces in the same channels but does not fail the run (exit 0 when only warnings are present). Renders as a yellow `::warning` annotation. Used for: Vale rules with `level: warning` or `level: suggestion` (most `Diataxis.*` quadrant-drift rules).
+- **Error**: fails the run (exit non-zero). Renders as a red `::error` annotation. Used for: structure violations, AI failures, the `Terminology.*` slop lists, em-dash, forbidden terms, and the quadrant-specific `Diataxis.*` rules (HowTo, Explanation, Reference, Tutorial, and their per-quadrant drift checks).
+- **Warning**: surfaces in the same channels but does not fail the run (exit 0 when only warnings are present). Renders as a yellow `::warning` annotation. Used for cross-quadrant signal where context decides whether it's a real violation; currently only `Diataxis.CrossContamination` ("tutorial-style phrasing" anywhere) emits at this level.
 
 When only warnings fire, the run prints `verify clean across [layers] for <target> (N warning(s))` and exits 0. The AI layer is currently error-only ([#6](https://github.com/iii-hq/skills-and-validation/issues/6) tracks adding warning support).
 

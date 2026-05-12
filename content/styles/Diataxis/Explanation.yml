@@ -1,6 +1,6 @@
 extends: existence
-message: "Explanation docs discuss concepts, not steps. '%s' is procedural—move to How-to or Tutorial docs."
-level: warning
+message: "Explanation docs discuss concepts, not steps. '%s' is procedural. Move it to How-to or Tutorial docs."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

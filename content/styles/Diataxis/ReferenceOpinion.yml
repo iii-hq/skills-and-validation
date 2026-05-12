@@ -1,6 +1,6 @@
 extends: existence
-message: "Reference docs should be neutral. '%s' expresses opinion—state facts instead."
-level: warning
+message: "Reference docs should be neutral. '%s' expresses opinion. State facts instead."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

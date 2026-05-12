@@ -1,6 +1,6 @@
 extends: existence
-message: "Tutorials should provide one clear path. '%s' suggests alternatives—remove and guide the learner directly."
-level: warning
+message: "Tutorials should provide one clear path. '%s' suggests alternatives. Remove it and guide the learner directly."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

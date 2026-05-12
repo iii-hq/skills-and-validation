@@ -1,6 +1,6 @@
 extends: existence
-message: "Reference docs describe, not instruct. '%s' is instructional—move step-by-step guidance to How-to docs."
-level: warning
+message: "Reference docs describe, not instruct. '%s' is instructional. Move step-by-step guidance to How-to docs."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

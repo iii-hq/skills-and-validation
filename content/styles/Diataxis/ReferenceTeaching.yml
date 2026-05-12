@@ -1,6 +1,6 @@
 extends: existence
-message: "Reference docs inform, not teach. '%s' is teaching—link to Tutorial or Explanation docs."
-level: suggestion
+message: "Reference docs inform, not teach. '%s' is teaching. Link to Tutorial or Explanation docs."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

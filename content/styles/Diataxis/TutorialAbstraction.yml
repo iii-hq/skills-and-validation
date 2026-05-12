@@ -1,6 +1,6 @@
 extends: existence
-message: "Tutorials should stay concrete. '%s' is abstract—use specific examples instead."
-level: suggestion
+message: "Tutorials should stay concrete. '%s' is abstract. Use specific examples instead."
+level: error
 scope: sentence
 ignorecase: true
 tokens:

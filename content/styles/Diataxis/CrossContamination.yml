@@ -1,6 +1,6 @@
 extends: existence
 message: "'%s' signals tutorial content. If this is not a tutorial, consider rephrasing or moving to /tutorials/."
-level: suggestion
+level: warning
 scope: sentence
 ignorecase: true
 tokens:

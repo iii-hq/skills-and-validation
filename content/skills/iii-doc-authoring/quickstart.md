@@ -57,7 +57,7 @@ iii-skill-check verify <docs-root>       # structure + vale + ai
 
 The renderer writes one `<source>.skill.md` sibling per matched doc. Commit those alongside the sources; CI's `verify-rendered` flags drift between them and the source.
 
-## 4. Plug into CI
+## 4. Wire into CI
 
 Adding the GitHub Actions workflow is required to wire this validation into a consumer repository. The canonical example ships with the install at `content/github_workflows_example.yml`. Copy it into the consumer repo:
 

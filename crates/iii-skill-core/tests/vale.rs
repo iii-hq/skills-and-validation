@@ -85,12 +85,13 @@ fn vale_severity_maps_error_and_warning_distinctly() {
     let tmp = TempDir::new().unwrap();
     // Mix two violations of different severity:
     //   - "Blazing fast" → Terminology.SlopMarketing (level: error)
-    //   - "In this guide you will learn" → Diataxis.HowTo (level: warning)
-    // skill.md is treated as a how-to in .vale.ini, so both checks apply.
+    //   - "In this tutorial we'll" → Diataxis.CrossContamination (level: warning)
+    // skill.md is treated as a how-to in .vale.ini and CrossContamination
+    // runs on every Diataxis-scoped doc, so both checks apply here.
     let path = tmp.path().join("skill.md");
     std::fs::write(
         &path,
-        "# Test\n\nBlazing fast.\n\nIn this guide you will learn how to use this worker.\n",
+        "# Test\n\nBlazing fast.\n\nIn this tutorial we'll cover the basics.\n",
     )
     .unwrap();
     let artifacts: Vec<&std::path::Path> = vec![&path];
@@ -115,8 +116,7 @@ fn vale_severity_maps_error_and_warning_distinctly() {
     assert!(
         warnings
             .iter()
-            .any(|v| v.message.to_lowercase().contains("teaching")
-                || v.message.to_lowercase().contains("how-to")),
-        "expected a warning for how-to/teaching framing, got: {violations:?}"
+            .any(|v| v.message.to_lowercase().contains("tutorial")),
+        "expected a warning for cross-contamination/tutorial framing, got: {violations:?}"
     );
 }

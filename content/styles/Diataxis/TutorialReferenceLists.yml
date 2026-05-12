@@ -1,6 +1,6 @@
 extends: existence
-message: "Tutorials should not list all options. '%s' belongs in Reference docs—link there instead."
-level: suggestion
+message: "Tutorials should not list all options. '%s' belongs in Reference docs. Link there instead."
+level: error
 scope: sentence
 ignorecase: true
 tokens:
