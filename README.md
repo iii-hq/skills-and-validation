@@ -248,6 +248,50 @@ The full authoring guide is in `content/skills/iii-doc-authoring/`. Browse via `
 
 ---
 
+## LLM-only blocks
+
+Mark spans visible in skill artifacts (`skill.md`, `skills/*.md`, `<source>.skill.md`) but hidden from the rendered README. Applies in both worker `docs/` partials and docs-mode sources. README rendering passes the source through unchanged — the comment stays invisible to humans. Skill rendering strips block markers and expands the inline form to its inner text.
+
+Two shapes, two comment forms each:
+
+| Shape  | HTML form                                            | MDX form                                              |
+| ------ | ---------------------------------------------------- | ----------------------------------------------------- |
+| Block  | `<!-- llm-only:start -->` … `<!-- llm-only:end -->`  | `{/* llm-only:start */}` … `{/* llm-only:end */}`     |
+| Inline | `<!-- llm-only: short note -->`                      | `{/* llm-only: short note */}`                        |
+
+Use the HTML form in `.md` sources. Use the MDX form in `.mdx` sources — Mintlify strips HTML comments at publish time, so only `{/* … */}` survives into published docs.
+
+Block form — prose the human-facing README should never show:
+
+```markdown
+## Setup
+
+Run `iii worker add foo` to install.
+
+<!-- llm-only:start -->
+Prefer `get` over `set` for read-only flows; `set` invalidates the cache.
+<!-- llm-only:end -->
+```
+
+In the README the block is invisible (HTML comments don't render). In the skill artifact both marker lines are dropped and the inner prose appears as a normal paragraph.
+
+Inline form — the comment is replaced by its payload in the skill artifact, leaving the README unchanged:
+
+```markdown
+The worker exposes `set_token`. <!-- llm-only: call this before any other op; tokens cache for 60s -->
+```
+
+README: `The worker exposes set_token.` (comment hidden).
+Skill: `The worker exposes set_token. call this before any other op; tokens cache for 60s` (comment expanded to its inner text).
+
+### Relationship to `skill:...` markers
+
+The `skill:...` markers (above, docs mode only) decide *whether* a doc or section enters the skill set at all. `llm-only` decides *which spans of an in-scope source* are LLM-only versus shared with the README. They compose: an `llm-only` block inside an `<!-- skill:exclude-section -->`d section still gets dropped, because the whole section was excluded.
+
+The full authoring guides ship in `content/skills/iii-skill-authoring/llm-only-blocks.md` (worker mode) and `content/skills/iii-doc-authoring/llm-only-blocks.md` (docs mode).
+
+---
+
 ## Use it in your repo
 
 Add this to a workflow file in the consumer repo, e.g. `.github/workflows/skill-check.yml`:
