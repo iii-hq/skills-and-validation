@@ -67,7 +67,16 @@ fi
 if [ "$warnings" -gt 0 ]; then
   header_parts+=("$warnings warning$([ "$warnings" -eq 1 ] || echo s)")
 fi
-header=$(IFS=', '; echo "${header_parts[*]}")
+# IFS only uses its first character to join `[*]` expansions, so join
+# manually with ", " to keep "N errors, M warnings" readable.
+header=""
+for part in "${header_parts[@]}"; do
+  if [ -z "$header" ]; then
+    header="$part"
+  else
+    header="$header, $part"
+  fi
+done
 echo "$header across the verified workers."
 echo
 echo "| File | Line | Severity | Violation |"

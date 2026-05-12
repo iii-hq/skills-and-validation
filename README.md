@@ -324,13 +324,30 @@ jobs:
 
 Three layers of feedback, all driven by the validator's existing per-violation output:
 
-| Surface                         | Permission needed      | What appears                                                |
-| ------------------------------- | ---------------------- | ----------------------------------------------------------- |
-| Inline annotations (Files diff) | none (always-on)       | red squiggle on each `path:line` the validator flagged      |
-| Run summary (Checks tab)        | none (always-on)       | markdown table of every violation + `N verified, M skipped` |
-| Sticky PR comment               | `pull-requests: write` | same markdown table, updated in place on each push          |
+| Surface                         | Permission needed      | What appears                                                                                                       |
+| ------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Inline annotations (Files diff) | none (always-on)       | red squiggle on each error line, yellow squiggle on each warning line, on the `path:line` the validator flagged    |
+| Run summary (Checks tab)        | none (always-on)       | markdown table of every violation with a `Severity` column + `N verified, M skipped`                               |
+| Sticky PR comment               | `pull-requests: write` | same markdown table, headlined `N errors, M warnings across the verified workers.`, updated in place on each push  |
 
 Annotations and step summary are processed by the runner itself — no token, no API call, no opt-in. The PR-comment step uses the consumer's default `GITHUB_TOKEN` and runs only on `pull_request` events; without `pull-requests: write` it no-ops via `continue-on-error: true` rather than failing the run.
+
+#### Severity: errors vs warnings
+
+Each violation carries a severity that determines whether it blocks the build:
+
+- **Error** — fails the run (exit non-zero). Renders as a red `::error` annotation. Used for: structure violations, AI failures, and Vale rules with `level: error` (the `Terminology.*` slop lists, em-dash, forbidden terms).
+- **Warning** — surfaces in the same channels but does not fail the run (exit 0 when only warnings are present). Renders as a yellow `::warning` annotation. Used for: Vale rules with `level: warning` or `level: suggestion` (most `Diataxis.*` quadrant-drift rules).
+
+When only warnings fire, the run prints `verify clean across [layers] for <target> (N warning(s))` and exits 0. The AI layer is currently error-only ([#6](https://github.com/iii-hq/skills-and-validation/issues/6) tracks adding warning support).
+
+Validator output is the format the scripts in `scripts/annotate.sh` and `scripts/summary.sh` parse:
+
+```
+<file>:<line>:<severity> — <message>
+```
+
+`<severity>` is `error` or `warning`. Tooling that scrapes the output can split on the third colon-separated field.
 
 ### Action inputs
 
