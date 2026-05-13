@@ -392,8 +392,34 @@ runs:
         fi
 
         git commit -m "chore: auto-render skill artifacts"
-        git push origin "HEAD:${GITHUB_HEAD_REF}"
-        echo "committed rendered drift to ${GITHUB_HEAD_REF}"
+
+        # Retry-with-rebase on push. Matrix-strategy consumers run the
+        # action in parallel jobs (e.g. workers + docs modes); both
+        # jobs may auto-commit a rendered diff and race on push. Each
+        # matrix run touches a disjoint path set (workers: README /
+        # skill.md / skills/; docs: *.skill.md siblings), so rebasing
+        # this commit onto whatever the other job pushed is normally
+        # conflict-free. If the rebase does conflict — overlapping
+        # paths between matrix runs — abort and surface a warning
+        # rather than paper over a real merge issue.
+        for attempt in 1 2 3 4 5; do
+          if git push origin "HEAD:${GITHUB_HEAD_REF}"; then
+            [ "$attempt" -gt 1 ] && \
+              echo "auto-render push succeeded on attempt $attempt"
+            echo "committed rendered drift to ${GITHUB_HEAD_REF}"
+            exit 0
+          fi
+          echo "::notice::auto-render push rejected (attempt $attempt); fetching + rebasing"
+          git fetch --quiet origin "${GITHUB_HEAD_REF}" || true
+          if ! git rebase --quiet "origin/${GITHUB_HEAD_REF}"; then
+            git rebase --abort 2>/dev/null || true
+            echo "::warning::auto-render rebase conflicted with origin/${GITHUB_HEAD_REF}; re-render locally and push."
+            exit 1
+          fi
+          sleep "$attempt"
+        done
+        echo "::warning::auto-render push failed after 5 attempts"
+        exit 1
 
     - name: Fail on drift (read-only mode)
       if: ${{ always() && inputs.write != 'true' && steps.render.outputs.drift == 'present' }}
