@@ -286,6 +286,14 @@ fn ai_check_with_cache(
     );
     if let Some(c) = cache.as_ref() {
         if c.contains(&key) {
+            // Surface cache hits so a CI log reader can prove the API call
+            // was skipped (rather than inferring from timing). Paired with
+            // the "verify clean ..." line that follows, the log reads:
+            //   [ai-cache] hit: <path>
+            //   verify clean across [structure,vale,ai] for <path>
+            // A miss prints nothing here; the "verify clean" line alone
+            // means the AI layer ran end-to-end against the API.
+            println!("[ai-cache] hit: {}", canonical.display());
             return Ok(Ok(()));
         }
     }
