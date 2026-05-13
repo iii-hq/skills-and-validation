@@ -292,6 +292,49 @@ The full authoring guides ship in `content/skills/iii-skill-authoring/llm-only-b
 
 ---
 
+## Human-only blocks
+
+Inverse of `llm-only`: spans visible in the human-facing rendering (worker `README.md`, Mintlify-rendered docs source) but stripped from every LLM-facing artifact (`skill.md`, `skills/*.md`, `<source>.skill.md`). Applies in both worker and docs mode with no special casing.
+
+Same two shapes as `llm-only`, in both comment forms; pick the one that matches the source extension:
+
+| Shape  | HTML form (`.md`)                                            | MDX form (`.mdx`)                                            |
+| ------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| Block  | `<!-- human-only:start -->` … `<!-- human-only:end -->`      | `{/* human-only:start */}` … `{/* human-only:end */}`        |
+| Inline | `<!-- human-only: short note -->`                            | `{/* human-only: short note */}`                             |
+
+Block form, for a maintainer note humans should see in the README but the agent shouldn't:
+
+```markdown
+## Setup
+
+Run `iii worker add foo` to install.
+
+<!-- human-only:start -->
+**Heads-up for maintainers:** the legacy `foo` cli wrapper still lives under
+`tools/legacy/foo.sh`. We're removing it in v3; if you're refactoring this
+worker, delete the wrapper at the same time.
+<!-- human-only:end -->
+```
+
+README: the markers are invisible comments per CommonMark, so a reader sees the heads-up paragraph. `skill.md`: the entire block is gone.
+
+Inline form, where the payload is expanded to visible prose for humans and dropped entirely for the agent:
+
+```markdown
+Add the worker. <!-- human-only: maintainers, this image is rebuilt nightly; bump the tag in iii.lock when you upgrade. -->
+```
+
+README: `Add the worker. maintainers, this image is rebuilt nightly; bump the tag in iii.lock when you upgrade.` (comment expanded). `skill.md`: `Add the worker.` (comment dropped).
+
+**Docs-mode caveat:** Mintlify reads the doc source directly, so the inline form's payload doesn't appear on the published page; the comment stays as an invisible HTML/MDX comment, and no renderer pass runs between the source and Mintlify to expand it. Use the block form in docs sources when you want humans to actually see the content; reserve the inline form for worker `README.md` partials and for maintainer notes the LLM should never see.
+
+Combined with `llm-only`, a single source can carry three audiences cleanly: plain prose (both sides see it), `llm-only` blocks (LLM only), and `human-only` blocks (humans only). The structure layer balance-checks both block types per file, so an unclosed marker fails verify.
+
+The full authoring guides ship in `content/skills/iii-skill-authoring/human-only-blocks.md` (worker mode) and `content/skills/iii-doc-authoring/human-only-blocks.md` (docs mode).
+
+---
+
 ## Use it in your repo
 
 Add this to a workflow file in the consumer repo, e.g. `.github/workflows/skill-check.yml`:

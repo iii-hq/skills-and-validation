@@ -5,6 +5,7 @@
 //!   - Frontmatter missing / malformed / required field empty
 //!   - Unknown `type:` value
 //!   - Unbalanced `llm-only:start` / `llm-only:end` (HTML or MDX form)
+//!   - Unbalanced `human-only:start` / `human-only:end` (HTML or MDX form)
 //!   - Both `skill:include-doc` AND `skill:exclude-doc` declared in the
 //!     same file (a strong signal something's confused)
 
@@ -41,6 +42,7 @@ pub fn check_source(path: &Path) -> Vec<Violation> {
     }
 
     violations.extend(check_llm_only_balance(&rel, &content));
+    violations.extend(check_human_only_balance(&rel, &content));
     violations.extend(check_conflicting_doc_scope(&rel, &content));
     violations
 }
@@ -64,6 +66,25 @@ fn check_llm_only_balance(file: &str, content: &str) -> Vec<Violation> {
         file,
         None,
         format!("unbalanced llm-only blocks: {starts} start markers, {ends} end markers"),
+    )]
+}
+
+fn check_human_only_balance(file: &str, content: &str) -> Vec<Violation> {
+    let starts = content
+        .lines()
+        .filter(|l| crate::human_only::is_human_only_start(l))
+        .count();
+    let ends = content
+        .lines()
+        .filter(|l| crate::human_only::is_human_only_end(l))
+        .count();
+    if starts == ends {
+        return Vec::new();
+    }
+    vec![Violation::error(
+        file,
+        None,
+        format!("unbalanced human-only blocks: {starts} start markers, {ends} end markers"),
     )]
 }
 

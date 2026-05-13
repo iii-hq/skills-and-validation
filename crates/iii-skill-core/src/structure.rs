@@ -95,6 +95,7 @@ pub fn check(dir: &Path) -> anyhow::Result<Vec<Violation>> {
 
     for (label, content) in &artifacts {
         violations.extend(check_llm_only_balance(label, content));
+        violations.extend(check_human_only_balance(label, content));
         violations.extend(check_iii_links(label, content, name, &known_leaves));
     }
 
@@ -188,6 +189,25 @@ fn check_llm_only_balance(label: &str, content: &str) -> Vec<Violation> {
         label,
         None,
         format!("unbalanced llm-only blocks: {starts} start markers, {ends} end markers"),
+    )]
+}
+
+fn check_human_only_balance(label: &str, content: &str) -> Vec<Violation> {
+    let starts = content
+        .lines()
+        .filter(|l| crate::human_only::is_human_only_start(l))
+        .count();
+    let ends = content
+        .lines()
+        .filter(|l| crate::human_only::is_human_only_end(l))
+        .count();
+    if starts == ends {
+        return Vec::new();
+    }
+    vec![Violation::error(
+        label,
+        None,
+        format!("unbalanced human-only blocks: {starts} start markers, {ends} end markers"),
     )]
 }
 

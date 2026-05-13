@@ -2,6 +2,7 @@ pub mod ai;
 pub mod bundle;
 pub mod config;
 pub mod docs;
+pub mod human_only;
 pub mod introspect;
 pub mod llm_only;
 pub mod render;
