@@ -197,6 +197,28 @@ runs:
         echo "render-fail=$fail" >> "$GITHUB_OUTPUT"
         exit 0
 
+    # Persistent skip-cache for the AI layer. Hash inputs are
+    # (artifact, rules, system_prompt, model, doc_type); on a hit the
+    # binary skips the Anthropic call entirely. A rules edit busts every
+    # affected entry automatically because the rules contribute to the
+    # hash, so there is no manual invalidation step. Only PASSes are
+    # recorded — a FAIL re-runs on the next push.
+    #
+    # restore-keys fall through to the most recent cache for this
+    # config-path, then any cache for the repo. The save key includes
+    # run_id + run_attempt so saves never collide; the post-step always
+    # writes under a fresh key so the cache rolls forward each run.
+    - name: Restore AI pass cache
+      id: ai-cache-restore
+      if: ${{ contains(inputs.layers, 'ai') }}
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/skv-ai-pass-cache
+        key: skv-ai-pass-cache-v1-${{ inputs.config-path }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          skv-ai-pass-cache-v1-${{ inputs.config-path }}-
+          skv-ai-pass-cache-v1-
+
     - name: Install Vale
       shell: bash
       run: |
@@ -219,6 +241,9 @@ runs:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         INSTALL_DIR: ${{ runner.temp }}/skill-check
         SKV_NO_UPDATE_CHECK: "1"
+        # iii-skill-check reads this env var to enable the persistent
+        # AI skip-cache. Unset = no caching (direct CLI behavior).
+        SKV_AI_CACHE: ${{ runner.temp }}/skv-ai-pass-cache
       run: |
         set -o pipefail
         log="${RUNNER_TEMP:-/tmp}/skv-verify.log"
@@ -253,6 +278,16 @@ runs:
           [ "$rc" -eq 0 ] && rc=1
         fi
         exit $rc
+
+    # Save unconditionally — `if: always()` ensures PASSes recorded mid-run
+    # survive a verify FAIL. The cache file only grows with PASS entries,
+    # so saving on FAIL is safe: failing artifacts didn't write to it.
+    - name: Save AI pass cache
+      if: ${{ always() && contains(inputs.layers, 'ai') && steps.ai-cache-restore.outcome == 'success' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/skv-ai-pass-cache
+        key: skv-ai-pass-cache-v1-${{ inputs.config-path }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     # `success() &&` is required because an explicit `if:` overrides the
     # default `success()` gate. Without it the auto-commit step would

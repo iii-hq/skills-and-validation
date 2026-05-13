@@ -244,6 +244,88 @@ fn rewrite_vale_paths(
     }
 }
 
+// --- AI cache -------------------------------------------------------------
+
+// Load the AI pass-cache when SKV_AI_CACHE points at a writable path.
+// CI sets this via action.yml + actions/cache; direct CLI runs leave it
+// unset and the AI layer pays full price every call. A load failure
+// degrades gracefully — we warn and continue without caching, since a
+// broken cache file should never block a verify run.
+fn load_ai_cache() -> Option<iii_skill_core::ai_cache::PassCache> {
+    let raw = std::env::var("SKV_AI_CACHE").ok()?;
+    if raw.is_empty() {
+        return None;
+    }
+    match iii_skill_core::ai_cache::PassCache::load(&raw) {
+        Ok(c) => Some(c),
+        Err(e) => {
+            eprintln!("::warning::failed to load AI pass cache at {raw}: {e}");
+            None
+        }
+    }
+}
+
+// Run one AI check, short-circuiting when the cache already holds a PASS
+// for the same `(artifact, rules, system_prompt, model, doc_type)` tuple.
+// Only PASS gets recorded; a FAIL re-runs on the next invocation.
+fn ai_check_with_cache(
+    body: &str,
+    canonical: &Path,
+    rules: &str,
+    system_prompt: &str,
+    doc_type: Option<iii_skill_core::docs::frontmatter::DocType>,
+    ai: &iii_skill_core::config::AiCheck,
+    cache: &mut Option<iii_skill_core::ai_cache::PassCache>,
+) -> anyhow::Result<Result<(), String>> {
+    let key = iii_skill_core::ai_cache::cache_key(
+        body,
+        rules,
+        system_prompt,
+        &ai.model,
+        doc_type,
+    );
+    if let Some(c) = cache.as_ref() {
+        if c.contains(&key) {
+            return Ok(Ok(()));
+        }
+    }
+    let result = match doc_type {
+        Some(ty) => iii_skill_core::ai::check_artifact_text_with_type(
+            body,
+            canonical,
+            rules,
+            system_prompt,
+            ty,
+            &ai.model,
+            &ai.api_key_env_var,
+            ai.max_tokens,
+        )?,
+        None => iii_skill_core::ai::check_artifact_text(
+            body,
+            canonical,
+            rules,
+            system_prompt,
+            &ai.model,
+            &ai.api_key_env_var,
+            ai.max_tokens,
+        )?,
+    };
+    if result.is_ok() {
+        if let Some(c) = cache.as_mut() {
+            // Best-effort write — a disk error mid-run shouldn't fail an
+            // otherwise-passing verify. The next push pays the API cost
+            // for this artifact again, which is the safe degraded mode.
+            if let Err(e) = c.record(&key) {
+                eprintln!(
+                    "::warning::failed to write AI pass cache at {}: {e}",
+                    c.path().display()
+                );
+            }
+        }
+    }
+    Ok(result)
+}
+
 // --- worker mode -----------------------------------------------------------
 
 fn verify_worker(
@@ -342,15 +424,22 @@ fn verify_worker(
         let system_prompt = std::fs::read_to_string(&prompt_path)
             .with_context(|| format!("reading {}", prompt_path.display()))?;
 
+        let mut cache = load_ai_cache();
         for art in &staged {
-            match iii_skill_core::ai::check_artifact_text(
+            // doc_type=None matches the original call shape here — worker
+            // mode pre-filters `rules` to the HowTo guide rather than
+            // adding the in-prompt type hint, so the AI call uses
+            // `check_artifact_text` (no hint). The cache key still
+            // includes the rules text, so the HowTo filter contributes
+            // to invalidation via that channel.
+            match ai_check_with_cache(
                 &art.body,
                 &art.canonical,
                 &rules,
                 &system_prompt,
-                &config.ai_check.model,
-                &config.ai_check.api_key_env_var,
-                config.ai_check.max_tokens,
+                None,
+                &config.ai_check,
+                &mut cache,
             )? {
                 Ok(()) => {}
                 Err(body) => ai_failures.push((art.canonical.clone(), body)),
@@ -479,6 +568,7 @@ fn verify_docs(
             iii_skill_core::docs::frontmatter::DocType,
             String,
         > = std::collections::HashMap::new();
+        let mut cache = load_ai_cache();
         for (art, ty) in staged.iter().zip(staged_doc_types.iter()) {
             let rules = match rules_by_type.get(ty) {
                 Some(r) => r.clone(),
@@ -488,15 +578,14 @@ fn verify_docs(
                     r
                 }
             };
-            match iii_skill_core::ai::check_artifact_text_with_type(
+            match ai_check_with_cache(
                 &art.body,
                 &art.canonical,
                 &rules,
                 &system_prompt,
-                *ty,
-                &config.ai_check.model,
-                &config.ai_check.api_key_env_var,
-                config.ai_check.max_tokens,
+                Some(*ty),
+                &config.ai_check,
+                &mut cache,
             )? {
                 Ok(()) => {}
                 Err(body) => ai_failures.push((art.canonical.clone(), body)),
@@ -574,15 +663,15 @@ fn verify_doc_file(
                     let prompt_path = rules_dir.join("_skill-check-prompt.md");
                     let system_prompt = std::fs::read_to_string(&prompt_path)
                         .with_context(|| format!("reading {}", prompt_path.display()))?;
-                    match iii_skill_core::ai::check_artifact_text_with_type(
+                    let mut cache = load_ai_cache();
+                    match ai_check_with_cache(
                         &staged[0].body,
                         &skill_path,
                         &rules,
                         &system_prompt,
-                        doc_type,
-                        &config.ai_check.model,
-                        &config.ai_check.api_key_env_var,
-                        config.ai_check.max_tokens,
+                        Some(doc_type),
+                        &config.ai_check,
+                        &mut cache,
                     )? {
                         Ok(()) => {}
                         Err(body) => ai_failures.push((skill_path.clone(), body)),
@@ -704,14 +793,17 @@ fn check_file(
         let prompt_path = rules_dir.join("_skill-check-prompt.md");
         let system_prompt = std::fs::read_to_string(&prompt_path)
             .with_context(|| format!("reading {}", prompt_path.display()))?;
-        match iii_skill_core::ai::check_artifact_with_type(
+        let body = std::fs::read_to_string(target)
+            .with_context(|| format!("reading {}", target.display()))?;
+        let mut cache = load_ai_cache();
+        match ai_check_with_cache(
+            &body,
             target,
             &rules,
             &system_prompt,
-            doc_type,
-            &config.ai_check.model,
-            &config.ai_check.api_key_env_var,
-            config.ai_check.max_tokens,
+            Some(doc_type),
+            &config.ai_check,
+            &mut cache,
         )? {
             Ok(()) => {}
             Err(body) => ai_failures.push((target.to_path_buf(), body)),

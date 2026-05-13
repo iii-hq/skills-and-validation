@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod ai_cache;
 pub mod bundle;
 pub mod config;
 pub mod docs;
