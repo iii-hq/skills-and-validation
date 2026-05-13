@@ -13,7 +13,7 @@ fn loads_template_skill_check_yaml() {
     let path = repo_root().join("templates/.skill-check.yaml");
     let config = iii_skill_core::config::load(&path).expect("config should load");
     assert_eq!(config.ai_check.provider, "anthropic");
-    assert_eq!(config.ai_check.model, "claude-opus-4-7");
+    assert_eq!(config.ai_check.model, "claude-sonnet-4-6");
     assert_eq!(config.ai_check.api_key_env_var, "ANTHROPIC_API_KEY");
     assert!(config.ai_check.max_tokens < 10000);
     // `version` is the schema version of .skill-check.yaml itself — present
