@@ -731,22 +731,27 @@ fn report(
 ) -> anyhow::Result<()> {
     use iii_skill_core::structure::Severity;
 
-    // Emit one line per violation. Severity is encoded between the
-    // line number and the message so scripts/annotate.sh and
-    // scripts/summary.sh can route warnings to `::warning::` and keep
-    // them out of the error count.
-    //
-    // Line format: `<file>:<line>:<severity> — <message>` (or
-    // `<file>::<severity> — <message>` when no line is available).
+    // Emit one line per violation in the canonical
+    // `<file>:<line>:<severity> — <message>` shape so scripts/annotate.sh
+    // (inline workflow annotations) and scripts/summary.sh (PR-comment
+    // body + step summary) can parse a single grammar. Whole-file
+    // violations with no specific line anchor at line 1.
     if !violations.is_empty() {
         for v in violations {
-            let line = v.line.map(|l| format!(":{l}")).unwrap_or_default();
-            eprintln!("{}{}:{} — {}", v.file, line, v.severity.label(), v.message);
+            let line = v.line.unwrap_or(1);
+            eprintln!("{}:{}:{} — {}", v.file, line, v.severity.label(), v.message);
         }
     }
+    // The AI judge's prompt asks for `<path>:<line> — <msg>` (no
+    // severity); inject `:error` so its lines fit the same grammar as
+    // structural violations. The `FAIL` header and any free-form text
+    // the model emits pass through untouched.
     if !ai_failures.is_empty() {
         for (path, body) in ai_failures {
-            eprintln!("\n[AI] {}\n{}", path.display(), body);
+            eprintln!("\n[AI] {}", path.display());
+            for line in body.lines() {
+                eprintln!("{}", normalize_ai_violation_line(line));
+            }
         }
     }
 
@@ -778,6 +783,24 @@ fn report(
         println!("verify clean across [{layers}] for {target_label}");
     }
     Ok(())
+}
+
+/// Rewrite an AI-judge body line so it parses with the structural
+/// violation grammar. Matches `<path>:<digits> — <rest>` and injects
+/// `:error` between the digits and the dash; non-matching lines are
+/// returned verbatim.
+fn normalize_ai_violation_line(line: &str) -> String {
+    let Some((head, rest)) = line.split_once(" — ") else {
+        return line.to_string();
+    };
+    let Some(colon_idx) = head.rfind(':') else {
+        return line.to_string();
+    };
+    let lineno = &head[colon_idx + 1..];
+    if lineno.is_empty() || !lineno.chars().all(|c| c.is_ascii_digit()) {
+        return line.to_string();
+    }
+    format!("{head}:error — {rest}")
 }
 
 /// Resolve project-rules directory. Order: CLI flag, config field, bundled.
@@ -909,4 +932,34 @@ fn locate_diataxis_dir() -> Option<PathBuf> {
     iii_skill_core::bundle::find_content_root()
         .map(|c| c.join("skills").join("iii-doc-authoring").join("diataxis"))
         .filter(|p| p.is_dir())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_ai_violation_line;
+
+    #[test]
+    fn injects_error_severity_into_judge_line() {
+        let input = "docs/quickstart.mdx.skill.md:6 — fluff cited — rephrase";
+        let expected =
+            "docs/quickstart.mdx.skill.md:6:error — fluff cited — rephrase";
+        assert_eq!(normalize_ai_violation_line(input), expected);
+    }
+
+    #[test]
+    fn passes_through_fail_header() {
+        assert_eq!(normalize_ai_violation_line("FAIL"), "FAIL");
+    }
+
+    #[test]
+    fn passes_through_freeform_em_dash_prose() {
+        let input = "the model rambled — without a path prefix";
+        assert_eq!(normalize_ai_violation_line(input), input);
+    }
+
+    #[test]
+    fn passes_through_non_numeric_after_colon() {
+        let input = "docs/README.md:error — already normalized";
+        assert_eq!(normalize_ai_violation_line(input), input);
+    }
 }
