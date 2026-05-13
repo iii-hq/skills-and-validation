@@ -177,7 +177,7 @@ See `templates/.skill-check.yaml` for an example file.
 | `rules.path`               | no       | Local override for `project-rules/`. Omit to use the rules bundled with the released validator.                                                         |
 | `styles.path`              | no       | Local override for the Vale `styles/` dir. Omit to use the bundled styles.                                                                              |
 
-Pin the release in your workflow file via `uses: iii-hq/skills-and-validation@v0.1` (floats to the latest 0.1.x patch) or `@v0.1.5` (exact). Bump `version` only when the schema itself changes; most consumers leave it alone.
+Pin the release in your workflow file via `uses: iii-hq/skills-and-validation@v0.3` (floats to the latest 0.3.x patch) or `@v0.3.0` (exact). Bump `version` only when the schema itself changes; most consumers leave it alone.
 
 ### Modes
 
@@ -352,13 +352,15 @@ permissions:
   pull-requests:
     write # opt-in: enables the sticky PR comment.
     # Omit to keep just inline annotations + the run summary.
+  actions: write # required for the persistent AI skip-cache (actions/cache).
+  # Omit to disable the cache — every push re-runs every AI check.
 
 jobs:
   skill-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: iii-hq/skills-and-validation@v0.1.0
+      - uses: iii-hq/skills-and-validation@v0.3
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -372,6 +374,7 @@ Three layers of feedback, all driven by the validator's existing per-violation o
 | Inline annotations (Files diff) | none (always-on)       | red squiggle on each error line, yellow squiggle on each warning line, on the `path:line` the validator flagged    |
 | Run summary (Checks tab)        | none (always-on)       | markdown table of every violation with a `Severity` column + `N verified, M skipped`                               |
 | Sticky PR comment               | `pull-requests: write` | same markdown table, headlined `N errors, M warnings across the verified workers.`, updated in place on each push  |
+| Persistent AI skip-cache        | `actions: write`       | unchanged artifacts skip the AI call on subsequent pushes; the cache survives across PR runs via `actions/cache`. Omit to disable — every push re-runs every AI check. |
 
 Annotations and step summary are processed by the runner itself: no token, no API call, no opt-in. The PR-comment step uses the consumer's default `GITHUB_TOKEN` and runs only on `pull_request` events; without `pull-requests: write` it no-ops via `continue-on-error: true` rather than failing the run.
 
@@ -423,7 +426,7 @@ jobs:
             docs-glob: docs/**/*.md docs/**/*.mdx
     steps:
       - uses: actions/checkout@v5
-      - uses: iii-hq/skills-and-validation@v0.2
+      - uses: iii-hq/skills-and-validation@v0.3
         with:
           config-path: ${{ matrix.config-path }}
           docs-glob: ${{ matrix.docs-glob || '**/*.md **/*.mdx' }}
@@ -446,6 +449,7 @@ With `write: true` plus `contents: write`, the action commits the rendered diff 
 permissions:
   contents: write # required for auto-fix
   pull-requests: write # required for the sticky PR comment
+  actions: write # required for the persistent AI skip-cache
 
 jobs:
   skill-check:
@@ -456,7 +460,7 @@ jobs:
           ref:
             ${{ github.head_ref }} # check out the PR branch directly
             # (not the merge commit) so push-back lands
-      - uses: iii-hq/skills-and-validation@v0.1
+      - uses: iii-hq/skills-and-validation@v0.3
         with:
           write: true
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
