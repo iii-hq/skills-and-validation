@@ -51,6 +51,13 @@ fi
 fail=0
 verified=0
 skipped=0
+# pr-diff scope: when set and the file is non-empty, only validate
+# workers whose dir contains at least one changed file. The render
+# step still runs against every matched worker (cheap, local-only),
+# so rendered-artifact drift detection isn't affected.
+if [ -n "${SKV_CHANGED_FILES:-}" ] && [ ! -s "${SKV_CHANGED_FILES:-/nonexistent}" ]; then
+  unset SKV_CHANGED_FILES
+fi
 for manifest in $WORKERS_GLOB; do
   dir="$(dirname "$manifest")"
   # `docs/intro.md` is the minimum required partial for the renderer.
@@ -62,6 +69,13 @@ for manifest in $WORKERS_GLOB; do
     echo "::notice::skipping $dir (no docs/intro.md — worker isn't using the renderer)"
     skipped=$((skipped + 1))
     continue
+  fi
+  if [ -n "${SKV_CHANGED_FILES:-}" ]; then
+    if ! grep -q "^$dir/" "$SKV_CHANGED_FILES"; then
+      echo "::notice::pr-diff scope: skipping $dir (no changed files under it)"
+      skipped=$((skipped + 1))
+      continue
+    fi
   fi
   echo "::group::$dir"
   if ! "$BIN" verify-rendered "$dir"; then

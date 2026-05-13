@@ -50,12 +50,27 @@ fi
 fail=0
 verified=0
 skipped=0
+# pr-diff scope: when set and the file is non-empty, only validate
+# source docs whose path appears in the changed-files list. Doing the
+# match on the source path (not the rendered `<source>.skill.md`
+# sibling) keeps the filter intuitive — consumers see "I edited
+# docs/foo.mdx, only docs/foo.mdx was checked."
+if [ -n "${SKV_CHANGED_FILES:-}" ] && [ ! -s "${SKV_CHANGED_FILES:-/nonexistent}" ]; then
+  unset SKV_CHANGED_FILES
+fi
 for doc in $DOCS_GLOB; do
   # Skip rendered skill outputs.
   case "$doc" in
     *.skill.md) continue ;;
   esac
   [ -f "$doc" ] || continue
+
+  if [ -n "${SKV_CHANGED_FILES:-}" ]; then
+    if ! grep -Fxq "$doc" "$SKV_CHANGED_FILES"; then
+      skipped=$((skipped + 1))
+      continue
+    fi
+  fi
 
   echo "::group::$doc"
   if ! "$BIN" verify-rendered "$doc"; then

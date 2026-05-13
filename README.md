@@ -407,6 +407,7 @@ Validator output is the format the scripts in `scripts/annotate.sh` and `scripts
 | `vale-version`      | `3.14.1`                 | Pinned Vale version                                                                                                                |
 | `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                            |
 | `write`             | `false`                  | Auto-render and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`.         |
+| `scope`             | `all`                    | `all` validates every artifact matching the glob; `pr-diff` (PR events only) restricts to files changed against the merge base. A diff that touches any `.skill-check.yaml` falls back to full scan. In worker mode, a changed file under `<worker-dir>/` validates the whole worker since rendering is per-worker. |
 
 The action auto-detects the mode by reading the `.skill-check.yaml` named by `config-path`. Worker-mode consumers leave `docs-glob` at its default (and it's ignored); docs-mode consumers leave `workers-glob` at its default (also ignored).
 

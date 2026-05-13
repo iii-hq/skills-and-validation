@@ -51,6 +51,16 @@ inputs:
       README.md / skill.md / skills/; docs mode commits `<source>.skill.md`
       siblings only. Requires `contents: write`.
     default: "false"
+  scope:
+    description: |
+      `all` (default) | `pr-diff`. Controls which artifacts get verified.
+      With `pr-diff`, on `pull_request` events only files changed in the
+      PR (against the merge base) are validated; in worker mode, a
+      changed file under `<worker-dir>/` validates the whole worker.
+      A diff that touches any `.skill-check.yaml` falls back to full
+      scan since those changes affect verdicts globally. On `push`
+      events `pr-diff` also falls back to full scan.
+    default: "all"
 
 runs:
   using: composite
@@ -197,6 +207,53 @@ runs:
         echo "render-fail=$fail" >> "$GITHUB_OUTPUT"
         exit 0
 
+    # Compute the PR-diff scope when `scope: pr-diff` and the event is a
+    # pull request. The verify scripts filter their glob iteration by
+    # intersection with the path list; an empty/unset path means full
+    # scan. Bailout to full scan when the diff touches any
+    # `.skill-check.yaml` or the workflow file itself — those changes
+    # invalidate verdicts for unchanged files too, so skipping them
+    # would let a regression slip through. `gh pr diff --name-only`
+    # works under default `actions/checkout@v4` (no need for full
+    # fetch-depth) and reports only the destination paths of renames.
+    - name: Compute changed files (pr-diff scope)
+      id: diff
+      if: ${{ inputs.scope == 'pr-diff' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        out="${RUNNER_TEMP:-/tmp}/skv-changed-files"
+        : > "$out"
+
+        # ACMRT = added/copied/modified/renamed/typechanged. Deleted
+        # files are excluded — they don't exist on disk so the verify
+        # scripts' `[ -f "$doc" ] || continue` would skip them anyway,
+        # but filtering here avoids them counting toward bailout logic.
+        if ! gh pr diff "${{ github.event.pull_request.number }}" \
+              --name-only > "$out" 2>/dev/null; then
+          echo "::warning::could not compute PR diff; falling back to full scan"
+          echo "changed-files=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        count=$(wc -l < "$out" | tr -d ' ')
+        echo "PR diff: $count changed file(s)"
+
+        # Bail to full scan when any .skill-check.yaml changes — those
+        # affect verdicts globally (rules, model, ai_check settings).
+        # Workflow-file edits are NOT a bailout: the workflow controls
+        # execution shape (which layers run, glob scope) but not what
+        # the validator decides. A consumer who needs `layers: ai`
+        # added retroactively can opt out of pr-diff for that one PR.
+        if grep -Eq '(^|/)\.skill-check\.yaml$' "$out"; then
+          echo "::notice::pr-diff bailout — full scan triggered by .skill-check.yaml change"
+          echo "changed-files=" >> "$GITHUB_OUTPUT"
+        else
+          echo "pr-diff scope: filtering to $count file(s)"
+          echo "changed-files=$out" >> "$GITHUB_OUTPUT"
+        fi
+
     # Persistent skip-cache for the AI layer. Hash inputs are
     # (artifact, rules, system_prompt, model, doc_type); on a hit the
     # binary skips the Anthropic call entirely. A rules edit busts every
@@ -244,6 +301,10 @@ runs:
         # iii-skill-check reads this env var to enable the persistent
         # AI skip-cache. Unset = no caching (direct CLI behavior).
         SKV_AI_CACHE: ${{ runner.temp }}/skv-ai-pass-cache
+        # verify-*.sh reads this env var to scope its glob iteration to
+        # files in the PR diff. Empty = full scan (scope=all, or
+        # pr-diff bailout via .skill-check.yaml / workflow edits).
+        SKV_CHANGED_FILES: ${{ steps.diff.outputs.changed-files }}
       run: |
         set -o pipefail
         log="${RUNNER_TEMP:-/tmp}/skv-verify.log"
