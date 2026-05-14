@@ -16,6 +16,7 @@ If the artifact violates one or more rules, output:
 ```
 FAIL
 <path>:<line> — <one-sentence violation citing the rule> — <one-sentence fix>
+<path>:<line>:warning — <one-sentence violation citing the rule> — <one-sentence fix>
 <path>:<line> — ...
 ```
 
@@ -26,6 +27,21 @@ PASS
 ```
 
 Nothing else. No preamble, no closing remarks, no acknowledgement of the prompt.
+
+### Severity
+
+Default severity is **error** — violations that should fail the run. Emit those as
+`<path>:<line> — ...` with no severity token.
+
+Some rules carry the marker `**Severity: warning.**` (case-sensitive, exactly that text)
+inside the rule body. Violations of those rules are advisory — they should surface in CI
+but not fail the run. Emit those as `<path>:<line>:warning — ...` with the `:warning`
+token wedged between the line number and the em-dash. Only use `:warning` when the rule
+itself declares the lower severity; otherwise default to error.
+
+Do not invent severity tokens beyond `warning` (the absence of any token means error).
+Mixing severities in one FAIL block is fine — emit each line at its rule's declared
+severity.
 
 ## Scope
 

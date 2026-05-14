@@ -864,15 +864,31 @@ fn report(
         }
     }
 
+    // AI judge emits per-line severity in the body now (default error,
+    // `:warning` for rules tagged `**Severity: warning.**`). Walk the
+    // body line by line via classify_ai_line so a mixed FAIL block
+    // contributes correctly to each bucket.
+    let mut ai_errors = 0;
+    let mut ai_warnings = 0;
+    for (_, body) in ai_failures {
+        for line in body.lines() {
+            match classify_ai_line(line) {
+                Some(Severity::Error) => ai_errors += 1,
+                Some(Severity::Warning) => ai_warnings += 1,
+                None => {}
+            }
+        }
+    }
     let error_count = violations
         .iter()
         .filter(|v| v.severity == Severity::Error)
         .count()
-        + ai_failures.len();
+        + ai_errors;
     let warning_count = violations
         .iter()
         .filter(|v| v.severity == Severity::Warning)
-        .count();
+        .count()
+        + ai_warnings;
 
     if error_count > 0 {
         let mut msg =
@@ -906,32 +922,67 @@ fn display_source_line(file: &str, line: usize) -> (String, usize) {
 }
 
 /// Rewrite an AI-judge body line so it parses with the structural
-/// violation grammar. Matches `<path>:<digits> — <rest>` and:
+/// violation grammar. The judge emits two shapes:
 ///
-/// - source-maps `<path>` and `<digits>` to the source partial via
-///   [`display_source_line`]
-/// - injects `:error` and the `~` approximate-line prefix
+/// - `<path>:<line> — ...` for error-severity violations (the default).
+/// - `<path>:<line>:warning — ...` for warning-severity violations
+///   (rules that carry `**Severity: warning.**`).
 ///
-/// Non-matching lines are returned verbatim (FAIL header, freeform
-/// model prose).
+/// This function source-maps the path + line via [`display_source_line`],
+/// inserts the `~` approximate-line prefix, and either preserves the
+/// model-emitted `:warning` token or injects `:error` when no severity
+/// is present. Non-matching lines pass through verbatim (FAIL header,
+/// freeform model prose).
 fn normalize_ai_violation_line(line: &str) -> String {
     let Some((head, rest)) = line.split_once(" — ") else {
         return line.to_string();
     };
-    let Some(colon_idx) = head.rfind(':') else {
+    // Detect an explicit severity suffix the model may have emitted.
+    // `:warning` is the only non-default token; `:error` is also accepted
+    // defensively in case the model ever spells it out.
+    let (head_no_sev, severity) = if let Some(h) = head.strip_suffix(":warning") {
+        (h, "warning")
+    } else if let Some(h) = head.strip_suffix(":error") {
+        (h, "error")
+    } else {
+        (head, "error")
+    };
+    let Some(colon_idx) = head_no_sev.rfind(':') else {
         return line.to_string();
     };
-    let lineno = &head[colon_idx + 1..];
+    let lineno = &head_no_sev[colon_idx + 1..];
     if lineno.is_empty() || !lineno.chars().all(|c| c.is_ascii_digit()) {
         return line.to_string();
     }
-    let path = &head[..colon_idx];
+    let path = &head_no_sev[..colon_idx];
     let line_num: usize = match lineno.parse() {
         Ok(n) => n,
         Err(_) => return line.to_string(),
     };
     let (src_path, src_line) = display_source_line(path, line_num);
-    format!("{src_path}:~{src_line}:error — {rest}")
+    format!("{src_path}:~{src_line}:{severity} — {rest}")
+}
+
+/// Classify an AI-judge body line for counting purposes. Returns the
+/// severity if the line is a violation line; `None` for the FAIL header
+/// and freeform prose. Mirrors the parsing in [`normalize_ai_violation_line`]
+/// but reports the verdict instead of rewriting.
+fn classify_ai_line(line: &str) -> Option<iii_skill_core::structure::Severity> {
+    use iii_skill_core::structure::Severity;
+    let (head, _) = line.split_once(" — ")?;
+    let (head_no_sev, severity) = if let Some(h) = head.strip_suffix(":warning") {
+        (h, Severity::Warning)
+    } else if let Some(h) = head.strip_suffix(":error") {
+        (h, Severity::Error)
+    } else {
+        (head, Severity::Error)
+    };
+    let colon_idx = head_no_sev.rfind(':')?;
+    let lineno = &head_no_sev[colon_idx + 1..];
+    if lineno.is_empty() || !lineno.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    Some(severity)
 }
 
 /// Resolve project-rules directory. Order: CLI flag, config field, bundled.
@@ -1067,7 +1118,8 @@ fn locate_diataxis_dir() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_ai_violation_line;
+    use super::{classify_ai_line, normalize_ai_violation_line};
+    use iii_skill_core::structure::Severity;
 
     #[test]
     fn injects_error_severity_and_source_maps_judge_line() {
@@ -1076,6 +1128,15 @@ mod tests {
         // line as the approximate anchor.
         let input = "docs/quickstart.mdx.skill.md:6 — fluff cited — rephrase";
         let expected = "docs/quickstart.mdx:~6:error — fluff cited — rephrase";
+        assert_eq!(normalize_ai_violation_line(input), expected);
+    }
+
+    #[test]
+    fn preserves_warning_severity_when_model_emits_it() {
+        // Model emits :warning for rules tagged `**Severity: warning.**`.
+        // normalize must keep the token (not overwrite with :error).
+        let input = "docs/foo.mdx.skill.md:42:warning — convention drift — rename";
+        let expected = "docs/foo.mdx:~42:warning — convention drift — rename";
         assert_eq!(normalize_ai_violation_line(input), expected);
     }
 
@@ -1094,5 +1155,36 @@ mod tests {
     fn passes_through_non_numeric_after_colon() {
         let input = "docs/README.md:error — already normalized";
         assert_eq!(normalize_ai_violation_line(input), input);
+    }
+
+    #[test]
+    fn classify_ai_line_detects_error_default() {
+        let line = "docs/foo.mdx.skill.md:6 — violation — fix";
+        assert_eq!(classify_ai_line(line), Some(Severity::Error));
+    }
+
+    #[test]
+    fn classify_ai_line_detects_explicit_warning() {
+        let line = "docs/foo.mdx.skill.md:42:warning — convention drift — rename";
+        assert_eq!(classify_ai_line(line), Some(Severity::Warning));
+    }
+
+    #[test]
+    fn classify_ai_line_detects_explicit_error_token() {
+        let line = "docs/foo.mdx.skill.md:6:error — violation — fix";
+        assert_eq!(classify_ai_line(line), Some(Severity::Error));
+    }
+
+    #[test]
+    fn classify_ai_line_returns_none_for_fail_header() {
+        assert_eq!(classify_ai_line("FAIL"), None);
+    }
+
+    #[test]
+    fn classify_ai_line_returns_none_for_freeform_prose() {
+        assert_eq!(
+            classify_ai_line("the model rambled — without a path prefix"),
+            None
+        );
     }
 }

@@ -8,18 +8,21 @@ Commands and subcommands follow the pattern `iii <noun> <verb>` — the noun (wh
 precedes the verb (what you're doing).
 
 Reviewing a CLI command involves **two independent checks**. Don't conflate them — they have
-different fixes.
+different fixes and different severities.
 
-1. **Convention check** — does the command form match `iii <noun> <verb>`? If the second word is not
-   a noun (e.g., `iii build worker`, `iii deploy <noun>`) or the order is reversed, flag it as a
-   *convention violation*. Real English verbs like `reinstall`, `rebuild`, `recheck` satisfy the
-   convention; do not flag them on convention grounds just because they start with `re-`.
+1. **Convention check.** **Severity: warning.** Does the command form match `iii <noun> <verb>`?
+   If the second word is not a noun (e.g., `iii build worker`, `iii deploy <noun>`) or the order is
+   reversed, flag it as a *convention violation*. Real English verbs like `reinstall`, `rebuild`,
+   `recheck` satisfy the convention; do not flag them on convention grounds just because they
+   start with `re-`. Naming is a guideline rather than a hard requirement; the right form is often
+   debatable, so this check surfaces as a warning rather than an error.
 
-2. **Recognized-list check** — even when the convention is satisfied, the second word must be a
+2. **Recognized-list check.** Even when the convention is satisfied, the second word must be a
    known subcommand of the noun. A novel-but-conformant command (e.g., `iii worker reinstall`)
    should be flagged as *unrecognized*, with the suggested replacement when one exists. Do not say
    "doesn't follow the noun-verb convention" for these — the convention is fine; the command isn't
-   in the catalog.
+   in the catalog. Unrecognized commands are an error (they mislead readers about what the CLI
+   actually supports).
 
 3. **"Re-" verbs are still verbs.** `reinstall`, `restart`, `reset`, `rebuild` all satisfy the
    noun-verb convention. Do not flag them on convention grounds.
