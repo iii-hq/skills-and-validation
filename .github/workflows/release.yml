@@ -58,6 +58,36 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      # The macos GitHub runner images (both macos-14 and macos-15)
+      # intermittently leave the cargo proxy in a broken state where
+      # `cargo build` fails with "rustup-init: unexpected argument
+      # 'build' found" — the proxy is resolving to the multi-call
+      # installer binary with no default toolchain set, so it can't
+      # dispatch the subcommand. setup-rust-toolchain reports success
+      # but the next cargo invocation fails. This step detects the
+      # broken state and reinstalls from sh.rustup.rs, which always
+      # produces a working proxy + default toolchain pair.
+      #
+      # Linux runners haven't shown this flake; gating on apple-darwin
+      # keeps the workaround surgical and the linux release-builds free
+      # of the extra step. Healthy macos runs hit the `cargo --version`
+      # success path and no-op past the curl.
+      - name: Recover from broken rustup state (macos)
+        if: contains(matrix.target, 'apple-darwin')
+        shell: bash
+        run: |
+          if ! cargo --version >/dev/null 2>&1; then
+            echo "::warning::cargo proxy is broken (rustup-init shadowing). Reinstalling stable toolchain."
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --no-modify-path --default-toolchain stable --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+            rustup target add "${{ matrix.target }}"
+          fi
+          rustup show
+          cargo --version
+          which cargo
+
       # Cache ~/.cargo/{registry,git} and target/. Keyed on Cargo.lock +
       # target triple so a `cargo update` invalidates correctly. Cross-rs
       # targets benefit primarily from the registry cache (the build itself
