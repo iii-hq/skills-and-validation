@@ -2,6 +2,24 @@
 
 Cross-cutting authoring and content rules for iii.
 
+## Order: workers, triggers, functions
+
+When prose, lists, headings, examples, or diagrams present **all three** of workers, triggers, and
+functions together, present them in that order: **workers, then triggers, then functions**. This is
+the canonical order in iii's mental model — workers register the functions and triggers a system
+runs; functions execute work; triggers route invocations into functions. Mixing the order
+("functions, triggers, and workers"; "triggers, workers, and functions") confuses cause and effect
+and is jarring on a re-read.
+
+Scope:
+
+- Applies only when **all three** appear together. A single primitive on its own has no ordering
+  question.
+- A subset of two — e.g., "workers and functions", "triggers and functions" — has no constraint.
+  Pick the order that reads best in context.
+- Applies in any presentation: running prose, bulleted lists, table column order, section headings,
+  diagram element order, code examples that introduce all three.
+
 ## No "steps"
 
 Do not refer to coding or process terms within iii workers or docs as a "step" or "steps". The
