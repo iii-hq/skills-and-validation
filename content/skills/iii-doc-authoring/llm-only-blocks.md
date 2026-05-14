@@ -6,20 +6,27 @@ type: "how-to"
 
 # llm-only blocks
 
-Some context belongs in the skill (visible to AI agents) but not in the published doc (visible to humans). Wrap that content in `llm-only:start` / `llm-only:end` markers. `iii-skill-render` strips the markers but keeps the inner content when it writes the `<source>.skill.md` artifact.
+Some context belongs in the skill (visible to AI agents) but not in the published doc (visible to humans). `iii-skill-render` strips the markers but keeps the inner content when it writes the `<source>.skill.md` artifact.
 
-## Comment forms
+## MDX (`.mdx`) sources
 
-Two equivalent comment forms are accepted on every `llm-only:` marker:
+In docs-mode, `.mdx` files are rendered to humans by Mintlify *directly* — the docs site shows the raw source after MDX processing. **Only the single-line inline form actually hides content from humans there.** The block form (`{/* llm-only:start */}` … `{/* llm-only:end */}`) does *not* work in MDX: each marker is its own single-line comment that Mintlify hides, but the prose between them is regular MDX content and renders normally. Mintlify also does not treat a multi-line `{/* … */}` as a single comment, so wrapping a payload across lines does not help.
 
-- HTML form, e.g., `<!-- llm-only:start -->`. Works in `.md`. Mintlify and most markdown renderers strip HTML comments from the published page.
-- MDX form, e.g., `{/* llm-only:start */}`. Works in `.md` and `.mdx`. MDX strips HTML comments at render time, so MDX-based docs should use this form.
-
-The two forms can be mixed inside the same file. Examples below use the HTML form for readability.
-
-## Block form
+Use the inline form:
 
 ```mdx
+The engine reads `config.yaml` from the cwd {/* llm-only: when generating a script that starts iii in a different directory, pass `--config /path/to/config.yaml` explicitly rather than relying on the working directory. */} on startup.
+```
+
+The published page shows the surrounding prose with the comment stripped. The `.skill.md` sibling expands the comment to its payload so the LLM sees it.
+
+If you need a multi-line LLM-only payload in docs-mode, move that content into a worker `.md` partial — those *are* run through the renderer and support the block form (see below). There is no clean way to hide a multi-line llm-only block in MDX today.
+
+## Worker `.md` partials
+
+Worker `docs/*.md` partials are not rendered to readers directly — `iii-skill-render` produces both the human-facing `README.md` and the LLM-facing `skill.md` / `skills/*.md` from the same source. Both shapes work:
+
+```markdown
 ## Configuration
 
 Configure the engine via its `config.yaml`.
@@ -27,21 +34,9 @@ Configure the engine via its `config.yaml`.
 <!-- llm-only:start -->
 The schema is documented in `crates/iii-engine-config/src/schema.rs`. Field defaults are computed from the `Default` impl in that file. When inlining the defaults into a doc, read them from the source rather than guessing.
 <!-- llm-only:end -->
-
-…
 ```
 
-The published page shows just the prose. The skill artifact contains the prose plus the inner block content (without the markers).
-
-## Inline form
-
-```mdx
-The engine reads `config.yaml` from the cwd <!-- llm-only: when generating a script that starts iii in a different directory, pass `--config /path/to/config.yaml` explicitly rather than relying on the working directory. --> on startup.
-```
-
-The published page shows the surrounding prose plus the comment (which Mintlify hides). The skill artifact reads `… config.yaml from the cwd when generating a script … on startup.`.
-
-Use the inline form when the AI-only content is one short clause; use the block form for multi-line additions.
+The README contains just the surrounding prose; the skill artifact contains the prose plus the inner block content.
 
 ## When to use it
 

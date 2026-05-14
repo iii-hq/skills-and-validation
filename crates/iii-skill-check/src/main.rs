@@ -520,7 +520,17 @@ fn verify_docs(
         if !needs_artifact {
             continue;
         }
-        let rendered = match iii_skill_core::docs::render::render_doc(&doc.abs) {
+        // Render the validator view (llm-only blocks dropped) for
+        // staging. The on-disk consumer view (with llm-only unwrapped)
+        // is what skillkit consumers read and what verify-rendered's
+        // drift check compares against — those still call render_doc.
+        // For validation we want the human-facing prose only, so the
+        // AI judge doesn't flag maintainer-targeted instructions as
+        // misplaced in a reader doc.
+        let rendered = match iii_skill_core::docs::render::render_doc_with_mode(
+            &doc.abs,
+            iii_skill_core::docs::render::LlmOnlyMode::Strip,
+        ) {
             Ok(r) => r,
             Err(e) => {
                 // Surface render failures so vale/ai don't silently
@@ -632,7 +642,12 @@ fn verify_doc_file(
             s.push(".skill.md");
             PathBuf::from(s)
         };
-        match iii_skill_core::docs::render::render_doc(source) {
+        // Validator view: llm-only stripped, not unwrapped (see
+        // verify_docs for the rationale).
+        match iii_skill_core::docs::render::render_doc_with_mode(
+            source,
+            iii_skill_core::docs::render::LlmOnlyMode::Strip,
+        ) {
             Ok(rendered) => {
                 let doc_type = rendered.frontmatter.doc_type;
                 let stage = tempfile::TempDir::new()

@@ -250,18 +250,16 @@ The full authoring guide is in `content/skills/iii-doc-authoring/`. Browse via `
 
 ## LLM-only blocks
 
-Mark spans visible in skill artifacts (`skill.md`, `skills/*.md`, `<source>.skill.md`) but hidden from the rendered README. Applies in both worker `docs/` partials and docs-mode sources. README rendering passes the source through unchanged, so the comment stays invisible to humans. Skill rendering strips block markers and expands the inline form to its inner text.
+Mark spans visible in skill artifacts (`skill.md`, `skills/*.md`, `<source>.skill.md`) but hidden from the human-facing rendering.
 
-Two shapes, two comment forms each:
+### Worker `.md` partials — both forms supported
 
-| Shape  | HTML form                                            | MDX form                                              |
-| ------ | ---------------------------------------------------- | ----------------------------------------------------- |
-| Block  | `<!-- llm-only:start -->` … `<!-- llm-only:end -->`  | `{/* llm-only:start */}` … `{/* llm-only:end */}`     |
-| Inline | `<!-- llm-only: short note -->`                      | `{/* llm-only: short note */}`                        |
+Worker partials (`docs/intro.md`, `docs/quickstart.md`, `docs/leaves/*.md`) are never rendered to humans directly. The renderer produces `README.md` (humans) and `skill.md` / `skills/*.md` (LLMs) from the same partials, so any form works:
 
-Use the HTML form in `.md` sources. Use the MDX form in `.mdx` sources, because Mintlify strips HTML comments at publish time, so only `{/* … */}` survives into published docs.
-
-Block form, for prose the human-facing README should never show:
+| Shape  | HTML form                                            |
+| ------ | ---------------------------------------------------- |
+| Block  | `<!-- llm-only:start -->` … `<!-- llm-only:end -->`  |
+| Inline | `<!-- llm-only: short note -->`                      |
 
 ```markdown
 ## Setup
@@ -275,7 +273,27 @@ Prefer `get` over `set` for read-only flows; `set` invalidates the cache.
 
 In the README the block is invisible (HTML comments don't render). In the skill artifact both marker lines are dropped and the inner prose appears as a normal paragraph.
 
-Inline form, where the comment is replaced by its payload in the skill artifact, leaving the README unchanged:
+### Docs-mode `.mdx` sources — inline form only
+
+`.mdx` files are rendered to humans by Mintlify *directly* — the docs site shows the raw source after MDX processing. **Only the single-line MDX-comment inline form actually hides content from humans there:**
+
+```mdx
+The worker exposes `set_token`. {/* llm-only: call this before any other op; tokens cache for 60s */}
+```
+
+Mintlify removes the entire `{/* … */}` comment, so the inline payload is invisible to readers. The `<source>.skill.md` sibling that `iii-skill-render` produces expands the comment to its inner text so the LLM sees it.
+
+**Do not use a block form in `.mdx` files.** Both shapes below leak the payload to the docs site:
+
+```mdx
+{/* llm-only:start */}
+This prose renders as plain text to humans on the site.
+{/* llm-only:end */}
+```
+
+The markers are each their own single-line comment (invisible), but the prose between them is regular MDX content that Mintlify renders normally. Mintlify also does not collapse multi-line `{/* … */}` blocks into a single comment, so the wrapping form does not help. There is no way to hide a multi-line LLM-only block in MDX today — keep the payload to a short single-line inline comment, or move it to a worker `.md` partial.
+
+The HTML inline form also works in `.md` partials when you want a short LLM-only note next to prose humans should see:
 
 ```markdown
 The worker exposes `set_token`. <!-- llm-only: call this before any other op; tokens cache for 60s -->
