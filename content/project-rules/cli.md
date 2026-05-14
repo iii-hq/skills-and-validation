@@ -22,8 +22,7 @@ different fixes.
    in the catalog.
 
 3. **"Re-" verbs are still verbs.** `reinstall`, `restart`, `reset`, `rebuild` all satisfy the
-   noun-verb convention. Do not flag them on convention grounds. (Also: `iii worker reinstall` is a
-   real subcommand — see the catalog below.)
+   noun-verb convention. Do not flag them on convention grounds.
 
 ### Recognized iii commands
 
@@ -31,9 +30,9 @@ Canonical lists from `iii <noun> --help`. Treat these as the source of truth; fl
 noun-verb pair as *unrecognized* (not as a convention violation).
 
 **`iii worker`** subcommands:
-- `iii worker add` (also `iii worker add --force` for the reinstall path)
+- `iii worker add`
 - `iii worker remove`
-- `iii worker reinstall` (equivalent to `add --force`; pass `--reset-config` to clear config.yaml too)
+- `iii worker reinstall`
 - `iii worker update`
 - `iii worker clear`
 - `iii worker start`

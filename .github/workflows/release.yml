@@ -76,16 +76,30 @@ jobs:
         if: contains(matrix.target, 'apple-darwin')
         shell: bash
         run: |
-          if ! cargo --version >/dev/null 2>&1; then
-            echo "::warning::cargo proxy is broken (rustup-init shadowing). Reinstalling stable toolchain."
+          # The macos runner images intermittently leave `cargo` on
+          # PATH resolving to `rustup-init` (the multi-call installer
+          # binary) with no default toolchain set. Naive detection like
+          # `cargo --version` is fooled — rustup-init recognizes
+          # `--version` as one of its own flags and prints its own
+          # version with exit 0, so the check passes even though
+          # `cargo build` immediately after fails with "unexpected
+          # argument 'build' found".
+          #
+          # Probe with a real subcommand instead. `cargo metadata
+          # --no-deps --format-version 1` requires a working toolchain
+          # to parse the manifest — rustup-init can't fake it.
+          if ! cargo metadata --no-deps --format-version 1 >/dev/null 2>&1; then
+            echo "::warning::cargo proxy is broken (rustup-init shadowing with no default toolchain). Reinstalling stable."
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
               | sh -s -- -y --no-modify-path --default-toolchain stable --profile minimal
             echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
             export PATH="$HOME/.cargo/bin:$PATH"
+            rustup default stable
             rustup target add "${{ matrix.target }}"
           fi
           rustup show
-          cargo --version
+          cargo metadata --no-deps --format-version 1 >/dev/null
+          echo "cargo proxy verified"
           which cargo
 
       # Cache ~/.cargo/{registry,git} and target/. Keyed on Cargo.lock +
