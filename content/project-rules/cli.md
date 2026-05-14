@@ -21,29 +21,42 @@ different fixes.
    "doesn't follow the noun-verb convention" for these — the convention is fine; the command isn't
    in the catalog.
 
-### Recognized `iii worker` subcommands
+3. **"Re-" verbs are still verbs.** `reinstall`, `restart`, `reset`, `rebuild` all satisfy the
+   noun-verb convention. Do not flag them on convention grounds. (Also: `iii worker reinstall` is a
+   real subcommand — see the catalog below.)
 
-The canonical set, as of writing:
+### Recognized iii commands
 
-- `iii worker init`
+Canonical lists from `iii <noun> --help`. Treat these as the source of truth; flag any other
+noun-verb pair as *unrecognized* (not as a convention violation).
+
+**`iii worker`** subcommands:
 - `iii worker add` (also `iii worker add --force` for the reinstall path)
 - `iii worker remove`
-- `iii worker list`
+- `iii worker reinstall` (equivalent to `add --force`; pass `--reset-config` to clear config.yaml too)
+- `iii worker update`
+- `iii worker clear`
 - `iii worker start`
 - `iii worker stop`
 - `iii worker restart`
+- `iii worker list`
+- `iii worker sync`
+- `iii worker verify`
 - `iii worker status`
 - `iii worker logs`
 - `iii worker exec`
-- `iii worker update`
-- `iii worker verify`
-- `iii worker sync`
-- `iii worker clear`
+- `iii worker sandbox`
 
-### Known unrecognized `iii worker` commands and their replacements
+**`iii cloud`** subcommands: `login`, `logout`, `whoami`, `context`, `orgs`, `projects`, `envs`,
+`deploy`, `deployments`, `versions`, `vars`, `domains`, `api-keys`, `registry`, `completions`,
+`push`.
 
-- `iii worker reinstall` → use `iii worker add --force`. (Convention is fine; `reinstall` is a valid
-  verb. It's just not a separate subcommand — the reinstall flow lives behind `add --force`.)
+**`iii sandbox`** subcommands: `run`, `create`, `exec`, `list`, `stop`, `upload`, `download`.
+
+**`iii project`** subcommands: `init`, `generate-docker`.
+
+**Verbless top-level commands** (take args, not a verb): `iii trigger <function-path>`,
+`iii console`, `iii update`. The `iii trigger` form is documented separately below.
 
 **Recognized exemption — `iii trigger`:** The syntax `iii trigger <function-path> [argA="value" argB=5 ...]` is the canonical way to invoke any registered function from the CLI (e.g., `iii trigger sandbox::run`, `iii trigger state::set`, `iii trigger iii::durable::publish`). The `function-path` follows the worker-namespaced `noun::verb` scheme.
 
