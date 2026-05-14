@@ -20,20 +20,24 @@ A worker is a worker. Don't introduce conceptual splits between SDK-driven proce
 
 ## Channels belong to iii-worker-manager
 
-The whole channel surface — concept, lifecycle, writer/reader/refs, examples — belongs in the iii-worker-manager Worker Docs.
+The eventual home for the channel surface — concept, lifecycle, writer/reader/refs, examples — is the iii-worker-manager Worker Docs.
 
-In the iii docs:
+**Once iii-worker-manager Worker Docs are published**, the iii docs should:
 - Strip channel-related types (`Channel`, `ChannelReader`, `ChannelWriter`, `ChannelDirection`, `StreamChannelRef`) from SDK reference pages.
 - Add a callout on each SDK page pointing readers to iii-worker-manager. See [`sdks.md`](./sdks.md) for the callout convention.
 
+Until then, SDK reference pages remain the canonical location for these surfaces; document them inline as today. Do not flag inline documentation of channel types on SDK pages as a violation.
+
 ## Logger and telemetry belong to iii-observability
 
-Logger methods, OpenTelemetry init, custom spans, worker metrics, log emission and subscription — all observability surface is documented with the iii-observability worker.
+The eventual home for the observability surface — Logger methods, OpenTelemetry init, custom spans, worker metrics, log emission and subscription — is the iii-observability worker.
 
-In the iii docs:
+**Once iii-observability Worker Docs are published**, the iii docs should:
 - Strip these surfaces from SDK reference pages.
 - Drop telemetry-related SDK types (`OtelConfig`, OTel-specific `ReconnectionConfig`, `TelemetryOptions`).
 - Add a callout on each SDK page pointing readers to iii-observability. See [`sdks.md`](./sdks.md) for the callout convention.
+
+Until then, SDK reference pages remain the canonical location for these surfaces; document them inline as today. Do not flag inline documentation of Logger / OTel / telemetry types on SDK pages as a violation.
 
 **`iii-observability` and `iii-telemetry` are separate workers.** `iii-observability` owns OpenTelemetry (traces, metrics, logs, baggage, sampling, alerts) — that's the surface SDK callouts point at. `iii-telemetry` is the anonymous-usage worker (Amplitude analytics, heartbeat, device-ID management) and is governed by the `III_TELEMETRY_ENABLED` env var, not `OTEL_ENABLED`. Don't conflate them — they have separate Worker Docs targets, and `how-to/disable-telemetry.mdx` documents both env vars distinctly.
 

@@ -4,9 +4,11 @@ Rules for the `sdk-reference/` pages (Node, Python, Rust, Browser, Engine).
 
 ## Strip worker-owned surfaces, add a callout
 
-When a surface is owned by a specific worker, strip it from the SDK reference page and replace with a callout pointing to that worker's docs. See [`workers.md`](./workers.md) for which surfaces are worker-owned.
+**Once a destination worker has published its Worker Docs**, strip its surface from the SDK reference page and replace with a callout pointing there. See [`workers.md`](./workers.md) for which surfaces are worker-owned and the per-surface gating condition.
 
-The callout convention used at the top of each client SDK page:
+Until the destination Worker Docs exist, SDK reference pages remain the canonical location and should document the surface inline. Do not flag inline documentation of pending-migration surfaces as a violation.
+
+The callout convention used at the top of each client SDK page (apply only once the relevant Worker Docs exist):
 
 ```mdx
 <Note>
