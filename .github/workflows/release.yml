@@ -24,7 +24,15 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin
-            runner: macos-14
+            # macos-14 was hitting a consistent setup-rust-toolchain
+            # failure where `cargo` on PATH resolved to `rustup-init`
+            # (the installer) instead of the rustup proxy — every
+            # `cargo metadata` / `cargo build` invocation errored with
+            # "unexpected argument 'metadata'/'build' found" against
+            # rustup-init's flag set. Image was broken across two
+            # back-to-back v0.4.2 release attempts on 2026-05-14.
+            # macos-15 is the current Apple-silicon runner and works.
+            runner: macos-15
             use_cross: false
           # x86_64-apple-darwin temporarily removed — GitHub's macos-13
           # runners aren't reliably building this target. Re-add when the
