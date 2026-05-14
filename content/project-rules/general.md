@@ -4,21 +4,29 @@ Cross-cutting authoring and content rules for iii.
 
 ## Order: workers, triggers, functions
 
-When prose, lists, headings, examples, or diagrams present **all three** of workers, triggers, and
-functions together, present them in that order: **workers, then triggers, then functions**. This is
-the canonical order in iii's mental model — workers register the functions and triggers a system
-runs; functions execute work; triggers route invocations into functions. Mixing the order
-("functions, triggers, and workers"; "triggers, workers, and functions") confuses cause and effect
-and is jarring on a re-read.
+The canonical presentation order for iii's three primitives is **workers, triggers, functions**.
+Workers register the functions and triggers a system runs; functions execute work; triggers route
+invocations into functions. Whenever two or more of these primitives appear together in prose,
+lists, headings, examples, or diagrams, preserve their relative order:
+
+- workers before triggers
+- workers before functions
+- triggers before functions
+
+Examples:
+
+- ✅ "workers, triggers, and functions"
+- ✅ "workers and triggers" (subset; relative order preserved)
+- ✅ "triggers and functions" (subset; relative order preserved)
+- ❌ "functions, triggers, and workers" (full inversion)
+- ❌ "triggers and workers" (subset violating relative order)
+- ❌ "functions and triggers" (subset violating relative order)
 
 Scope:
 
-- Applies only when **all three** appear together. A single primitive on its own has no ordering
-  question.
-- A subset of two — e.g., "workers and functions", "triggers and functions" — has no constraint.
-  Pick the order that reads best in context.
+- A single primitive on its own has no ordering question.
 - Applies in any presentation: running prose, bulleted lists, table column order, section headings,
-  diagram element order, code examples that introduce all three.
+  diagram element order, code examples that introduce more than one primitive.
 
 ## No "steps"
 
