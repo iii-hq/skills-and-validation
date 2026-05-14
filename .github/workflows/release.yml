@@ -58,36 +58,43 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      # Cache ~/.cargo/{registry,git} and target/. Keyed on Cargo.lock +
+      # target triple so a `cargo update` invalidates correctly. Cross-rs
+      # targets benefit primarily from the registry cache (the build itself
+      # runs inside a Docker container, so target/ reuse there is partial).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          shared-key: release
+
       # The macos GitHub runner images (both macos-14 and macos-15)
       # intermittently leave the cargo proxy in a broken state where
       # `cargo build` fails with "rustup-init: unexpected argument
       # 'build' found" — the proxy is resolving to the multi-call
       # installer binary with no default toolchain set, so it can't
       # dispatch the subcommand. setup-rust-toolchain reports success
-      # but the next cargo invocation fails. This step detects the
-      # broken state and reinstalls from sh.rustup.rs, which always
-      # produces a working proxy + default toolchain pair.
+      # but the next cargo invocation fails.
+      #
+      # The recovery must run *after* Swatinem/rust-cache@v2 because
+      # rust-cache has `cache-bin: true` and will restore a stale
+      # `~/.cargo/bin` from a previous cache hit, overwriting any
+      # earlier reinstall. We run last so whatever rust-cache restored
+      # is the final state we're fixing up.
+      #
+      # Probe with a real subcommand. `cargo metadata --no-deps
+      # --format-version 1` requires a working toolchain to parse the
+      # manifest — rustup-init's multi-call binary can't fake it.
+      # `cargo --version` is fooled because rustup-init recognizes
+      # `--version` as one of its own flags and prints with exit 0.
       #
       # Linux runners haven't shown this flake; gating on apple-darwin
-      # keeps the workaround surgical and the linux release-builds free
-      # of the extra step. Healthy macos runs hit the `cargo --version`
-      # success path and no-op past the curl.
+      # keeps the workaround surgical and the linux builds free of the
+      # extra step. Healthy macos runs hit the probe-passes path and
+      # no-op past the curl.
       - name: Recover from broken rustup state (macos)
         if: contains(matrix.target, 'apple-darwin')
         shell: bash
         run: |
-          # The macos runner images intermittently leave `cargo` on
-          # PATH resolving to `rustup-init` (the multi-call installer
-          # binary) with no default toolchain set. Naive detection like
-          # `cargo --version` is fooled — rustup-init recognizes
-          # `--version` as one of its own flags and prints its own
-          # version with exit 0, so the check passes even though
-          # `cargo build` immediately after fails with "unexpected
-          # argument 'build' found".
-          #
-          # Probe with a real subcommand instead. `cargo metadata
-          # --no-deps --format-version 1` requires a working toolchain
-          # to parse the manifest — rustup-init can't fake it.
           if ! cargo metadata --no-deps --format-version 1 >/dev/null 2>&1; then
             echo "::warning::cargo proxy is broken (rustup-init shadowing with no default toolchain). Reinstalling stable."
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -101,15 +108,6 @@ jobs:
           cargo metadata --no-deps --format-version 1 >/dev/null
           echo "cargo proxy verified"
           which cargo
-
-      # Cache ~/.cargo/{registry,git} and target/. Keyed on Cargo.lock +
-      # target triple so a `cargo update` invalidates correctly. Cross-rs
-      # targets benefit primarily from the registry cache (the build itself
-      # runs inside a Docker container, so target/ reuse there is partial).
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
-          shared-key: release
 
       - name: Install apt packages
         if: matrix.apt
