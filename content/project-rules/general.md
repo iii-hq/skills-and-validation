@@ -43,17 +43,6 @@ Skip the changelog for everything else: typos, wording tweaks, formatting, link 
 tooling, project rules, Vale styles, and other repo plumbing. When in doubt, skip it — the changelog
 is for readers, not contributors.
 
-## Avoid dead code
-
-Do not let unused exports, unused dependencies, or orphaned files / modules accumulate in any iii
-repo (engine, sdk, console, cli, crates). When removing a feature, remove its code, its
-dependencies, its config blocks, and any docs that reference it in the same change — do not leave
-deprecated-but-still-shipped surfaces behind.
-
-Each repo is expected to wire language-appropriate detection into CI (e.g., `cargo machete` and
-`#![warn(dead_code)]` for Rust, `knip` for TypeScript, `vulture` / `ruff` / `deptry` for Python).
-Tracker: [`todo/WORK.dead-code.md`](../todo/WORK.dead-code.md).
-
 ## "Telemetry" is ambiguous — always disambiguate
 
 iii has **two** distinct telemetry surfaces. Most prose talks about one or the other, rarely
@@ -90,8 +79,3 @@ variants). Prefer "software", "software engineering", or "system design" dependi
 iii is software for building systems; the "backend" qualifier implies a frontend/backend split that
 isn't meaningful at the engine level. Enforced by the `Terminology.BackendSoftware` Vale rule.
 
-## `motia-tools` is out of scope
-
-`crates/motia-tools` (the `motia` binary) is a separate product surface that predates the iii
-rename. Its docs are at motia.dev, not ideal-docs. When auditing the crates monorepo, do not flag
-`motia-tools` as a missing docs target.

@@ -18,7 +18,7 @@ Pull the rule sheet from the bundle the validator installs:
 
 The headlines:
 
-- No tutorial-speak in published docs that aren't tutorials. "Welcome!", "Let's get started!", "You're going to love this" all flag.
+- No tutorial-style framing in published docs that aren't tutorials. "Welcome!", "Let's get started!", "You're going to love this" all flag.
 - No marketing fluff. `Blazing fast`, `magical`, `powerful`, `the best`, `seamless`: drop them.
 - No hedging. "You might want to consider", "perhaps", "kind of": say it plainly or don't say it.
 - No exclamation salad. One exclamation per page is one too many in most contexts.
