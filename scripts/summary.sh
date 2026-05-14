@@ -13,11 +13,13 @@ set -euo pipefail
 input="${1:?missing log-file arg}"
 MODE_LABEL="${2:-}"
 
-# Violation lines are `<path>:<line>:<severity> — <message>` with
-# severity ∈ {error, warning}. Count each separately so warnings can
-# surface without dragging the overall status into "failed".
-errors=$(grep -cE '^[^[:space:]][^:]+:[0-9]+:error — ' "$input" || true)
-warnings=$(grep -cE '^[^[:space:]][^:]+:[0-9]+:warning — ' "$input" || true)
+# Violation lines are `<path>:~<line>:<severity> — <message>` with
+# severity ∈ {error, warning} and an optional `~` prefix on the line
+# number tagging it as "approximate" (rendered→source map). Count each
+# severity separately so warnings can surface without dragging the
+# overall status into "failed".
+errors=$(grep -cE '^[^[:space:]][^:]+:~?[0-9]+:error — ' "$input" || true)
+warnings=$(grep -cE '^[^[:space:]][^:]+:~?[0-9]+:warning — ' "$input" || true)
 total=$((errors + warnings))
 counts=$(grep -E '^[0-9]+ verified, [0-9]+ skipped' "$input" | tail -1 || true)
 layers=$(grep -E '^layers ran:' "$input" | tail -1 | sed -E 's/^layers ran: *//' || true)
@@ -79,15 +81,18 @@ for part in "${header_parts[@]}"; do
 done
 echo "$header across the verified workers."
 echo
-echo "| File | Line | Severity | Violation |"
+echo "| File | Approximate line | Severity | Violation |"
 echo "| --- | --- | --- | --- |"
-grep -E '^[^[:space:]][^:]+:[0-9]+:(error|warning) — ' "$input" | while IFS= read -r line; do
+grep -E '^[^[:space:]][^:]+:~?[0-9]+:(error|warning) — ' "$input" | while IFS= read -r line; do
   head="${line%% — *}"
   msg="${line#* — }"
   severity="${head##*:}"
   rest="${head%:*}"
   path="${rest%:*}"
   lineno="${rest##*:}"
+  # The line number carries a leading `~` (approximate-line tag from
+  # source-map translation). Keep it in the cell so a reader sees the
+  # framing without needing to recall what "Approximate line" means.
   msg_escaped="${msg//|/\\|}"
   printf '| `%s` | %s | %s | %s |\n' "$path" "$lineno" "$severity" "$msg_escaped"
 done

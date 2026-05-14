@@ -289,11 +289,14 @@ fn ai_check_with_cache(
             // Surface cache hits so a CI log reader can prove the API call
             // was skipped (rather than inferring from timing). Paired with
             // the "verify clean ..." line that follows, the log reads:
-            //   [ai-cache] hit: <path>
-            //   verify clean across [structure,vale,ai] for <path>
+            //   [ai-cache] hit: <source path>
+            //   verify clean across [structure,vale,ai] for <source path>
             // A miss prints nothing here; the "verify clean" line alone
-            // means the AI layer ran end-to-end against the API.
-            println!("[ai-cache] hit: {}", canonical.display());
+            // means the AI layer ran end-to-end against the API. Path is
+            // source-mapped so the cache log matches everything else.
+            let (display_path, _) =
+                display_source_line(&canonical.display().to_string(), 1);
+            println!("[ai-cache] hit: {display_path}");
             return Ok(Ok(()));
         }
     }
@@ -832,23 +835,29 @@ fn report(
     use iii_skill_core::structure::Severity;
 
     // Emit one line per violation in the canonical
-    // `<file>:<line>:<severity> — <message>` shape so scripts/annotate.sh
-    // (inline workflow annotations) and scripts/summary.sh (PR-comment
-    // body + step summary) can parse a single grammar. Whole-file
-    // violations with no specific line anchor at line 1.
+    // `<file>:~<line>:<severity> — <message>` shape. The path is mapped
+    // from the rendered `.skill.md` back to the source partial via
+    // source_map::translate; the leading `~` on the line tags it as
+    // "approximate" since rendered-to-source line mapping is best-effort
+    // (renderers strip frontmatter, insert headers, and may concatenate
+    // multiple partials). scripts/annotate.sh strips the `~` before
+    // emitting GitHub annotations; scripts/summary.sh keeps it for the
+    // PR-comment "Approximate line" column.
     if !violations.is_empty() {
         for v in violations {
-            let line = v.line.unwrap_or(1);
-            eprintln!("{}:{}:{} — {}", v.file, line, v.severity.label(), v.message);
+            let (path, line) = display_source_line(&v.file, v.line.unwrap_or(1));
+            eprintln!("{}:~{}:{} — {}", path, line, v.severity.label(), v.message);
         }
     }
     // The AI judge's prompt asks for `<path>:<line> — <msg>` (no
-    // severity); inject `:error` so its lines fit the same grammar as
-    // structural violations. The `FAIL` header and any free-form text
-    // the model emits pass through untouched.
+    // severity); inject `:error` and source-map the path+line so its
+    // lines fit the same grammar as structural violations. The `FAIL`
+    // header and any free-form text the model emits pass through.
     if !ai_failures.is_empty() {
         for (path, body) in ai_failures {
-            eprintln!("\n[AI] {}", path.display());
+            let (header_path, _) =
+                display_source_line(&path.display().to_string(), 1);
+            eprintln!("\n[AI] {header_path}");
             for line in body.lines() {
                 eprintln!("{}", normalize_ai_violation_line(line));
             }
@@ -885,10 +894,26 @@ fn report(
     Ok(())
 }
 
+/// Map a rendered violation path + line to the source partial it came
+/// from. Falls back to the original path when no candidate exists (e.g.
+/// the path was never a rendered artifact). Returns the path as a
+/// String to avoid lossy round-trips through PathBuf for display.
+fn display_source_line(file: &str, line: usize) -> (String, usize) {
+    match iii_skill_core::source_map::translate(std::path::Path::new(file), line) {
+        Some((src, src_line)) => (src.display().to_string(), src_line),
+        None => (file.to_string(), line),
+    }
+}
+
 /// Rewrite an AI-judge body line so it parses with the structural
-/// violation grammar. Matches `<path>:<digits> — <rest>` and injects
-/// `:error` between the digits and the dash; non-matching lines are
-/// returned verbatim.
+/// violation grammar. Matches `<path>:<digits> — <rest>` and:
+///
+/// - source-maps `<path>` and `<digits>` to the source partial via
+///   [`display_source_line`]
+/// - injects `:error` and the `~` approximate-line prefix
+///
+/// Non-matching lines are returned verbatim (FAIL header, freeform
+/// model prose).
 fn normalize_ai_violation_line(line: &str) -> String {
     let Some((head, rest)) = line.split_once(" — ") else {
         return line.to_string();
@@ -900,7 +925,13 @@ fn normalize_ai_violation_line(line: &str) -> String {
     if lineno.is_empty() || !lineno.chars().all(|c| c.is_ascii_digit()) {
         return line.to_string();
     }
-    format!("{head}:error — {rest}")
+    let path = &head[..colon_idx];
+    let line_num: usize = match lineno.parse() {
+        Ok(n) => n,
+        Err(_) => return line.to_string(),
+    };
+    let (src_path, src_line) = display_source_line(path, line_num);
+    format!("{src_path}:~{src_line}:error — {rest}")
 }
 
 /// Resolve project-rules directory. Order: CLI flag, config field, bundled.
@@ -1039,10 +1070,12 @@ mod tests {
     use super::normalize_ai_violation_line;
 
     #[test]
-    fn injects_error_severity_into_judge_line() {
+    fn injects_error_severity_and_source_maps_judge_line() {
+        // No source file on disk, so source_map::translate falls back to
+        // the candidate path (`.skill.md` stripped) with the rendered
+        // line as the approximate anchor.
         let input = "docs/quickstart.mdx.skill.md:6 — fluff cited — rephrase";
-        let expected =
-            "docs/quickstart.mdx.skill.md:6:error — fluff cited — rephrase";
+        let expected = "docs/quickstart.mdx:~6:error — fluff cited — rephrase";
         assert_eq!(normalize_ai_violation_line(input), expected);
     }
 

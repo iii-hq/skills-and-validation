@@ -7,6 +7,7 @@ pub mod human_only;
 pub mod introspect;
 pub mod llm_only;
 pub mod render;
+pub mod source_map;
 pub mod structure;
 pub mod update_check;
 pub mod vale;
