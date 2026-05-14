@@ -76,4 +76,8 @@ Both exist in the engine and both are Worker Docs targets:
 - `iii-http` (registered in `workers/rest_api/`, default-on) — the engine's HTTP server / REST API surface; owns the `http` trigger type and HTTP-exposed endpoints.
 - `iii-http-functions` (registered in `workers/http_functions/`, default-off) — the HTTP-invocation surface (calling external HTTP services from inside iii functions).
 
-Don't conflate them in stubs or callouts. The names are close enough to be confusing — flag for engineering naming review (see `PROGRESS-repo-checks.md` hanging pieces).
+The conflation rule is specifically about mixing **these two workers** in the same callout, stub, or sentence — for example, attributing `iii-http-functions`'s outbound-call behavior to `iii-http`, or vice versa.
+
+It is **not** a conflation to compare `iii-http` to other HTTP-server frameworks (Express, FastAPI, axum, Actix, etc.) — that is exactly what `iii-http` is, and the analogy is helpful for readers familiar with those frameworks. Do not flag web-framework analogies applied to `iii-http`.
+
+The names are close enough to be confusing — flag for engineering naming review (see `PROGRESS-repo-checks.md` hanging pieces).
