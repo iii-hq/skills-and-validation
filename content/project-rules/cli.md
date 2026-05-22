@@ -33,6 +33,7 @@ Canonical lists from `iii <noun> --help`. Treat these as the source of truth; fl
 noun-verb pair as *unrecognized* (not as a convention violation).
 
 **`iii worker`** subcommands:
+- `iii worker init`
 - `iii worker add`
 - `iii worker remove`
 - `iii worker reinstall`
@@ -53,7 +54,7 @@ noun-verb pair as *unrecognized* (not as a convention violation).
 `deploy`, `deployments`, `versions`, `vars`, `domains`, `api-keys`, `registry`, `completions`,
 `push`.
 
-**`iii sandbox`** subcommands: `run`, `create`, `exec`, `list`, `stop`, `upload`, `download`.
+**`iii worker sandbox`** subcommands: `run`, `create`, `exec`, `list`, `stop`, `upload`, `download`.
 
 **`iii project`** subcommands: `init`, `generate-docker`.
 
