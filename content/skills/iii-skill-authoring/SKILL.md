@@ -1,4 +1,5 @@
 ---
+name: "iii-skill-authoring"
 title: "iii-skill-authoring"
 description: "Skill bundle index for authoring the partials iii-skill-check renders into worker README, skill, and skills/leaves."
 type: "reference"

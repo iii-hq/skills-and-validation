@@ -1,111 +1,54 @@
 # skills-and-validation
 
-Render and validate skill artifacts against project-wide voice, structure, and Diataxis rules. Two modes:
+Render and validate iii worker docs against the project's voice, structure, and Diataxis rules. You write short markdown partials under `<worker>/docs/`; this project renders them into the worker's `README.md`, `skill.md`, and `skills/*.md`, then verifies the result with Vale and an AI pass on every commit and every PR.
 
-- **Worker mode**: partials under `<worker>/docs/` render into `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`. The original surface; v1 schemas land here implicitly.
-- **Docs mode**: Mintlify-shaped `.md` / `.mdx` sources each render into a sibling `<source>.skill.md`. Heading-level inclusion + per-doc opt-in/out via HTML-comment markers; per-type Vale rules driven by frontmatter `type:`. Opt in by setting `version: 2` and `mode: docs` in `.skill-check.yaml`.
-
-Ships two binaries and a composite GitHub Action. Consumers pin a `version` in `.skill-check.yaml`; the action and the pre-commit hook download a matching release tarball.
+It also supports a **docs mode** for standalone (Mintlify, Fumadocs, etc.) `.md` / `.mdx` documentation.
 
 ---
 
-## Setup
+## Install
 
-Four things to install, in this order: Vale (the prose linter the validator shells out to), the authoring skill bundles (so your tooling can read the conventions), the binaries (for local render + validation), and the pre-commit hook (so commits run the validator automatically).
+There are a few prerequisites to install; the pre-commit hook is optional.
 
-### 1. Install Vale
+### 1. Vale
 
-`iii-skill-check`'s vale layer shells out to the [Vale](https://vale.sh) binary. Without it, every local run fails the moment vale is invoked. The composite GitHub Action installs Vale into the runner automatically; only local installs need this step.
-
-```bash
-# macOS
-brew install vale
-
-# Linux (Homebrew on Linux works too)
-brew install vale
-
-# Or download a release directly
-# https://github.com/errata-ai/vale/releases
-```
-
-Confirm it's on your `PATH`:
+Vale is used to validate prose against static rules.
 
 ```bash
-vale --version
+brew install vale          # macOS or Linux Homebrew
+vale --version             # confirm it's on PATH
 ```
 
-The pinned Vale version we test against is in `.github/workflows/dogfood.yml` (`VALE_VERSION`). The CLI is generally backward-compatible across patch versions; pin if you need bit-exact reproducibility.
+Other installs: [vale.sh](https://vale.sh) or the [release page](https://github.com/errata-ai/vale/releases). The composite GitHub Action installs Vale on the CI runner for you, so only local setups need this step.
 
-### 2. Install the authoring skill bundles
-
-Two bundles ship from `content/skills/`:
-
-- **`iii-skill-authoring`**: for authoring iii worker partials. Directory layout, renderer slots, voice rules, per-function leaves, llm-only round-trip, running `iii-skill-check` against a worker. Use when you're writing the partials a worker's docs render from.
-- **`iii-doc-authoring`**: for authoring Mintlify-shaped `.md` / `.mdx` docs that the docs-mode pipeline validates. Frontmatter shape, Diataxis types, the `<!-- skill:... -->` marker reference, the per-quadrant writing guides under `iii-doc-authoring/diataxis/`. Use when you're writing standalone documentation outside a worker.
-
-Pick the surface that fits your tooling:
-
-**Through skillkit** (installs both bundles):
-
-```bash
-cd $HOME && npx skillkit add iii-hq/skills-and-validation/content/skills
-```
-
-**Through the iii engine** (after step 3 below puts the bundles on disk under `~/.local/share/skill-check/current/content/skills/`):
-
-```yaml
-# in your iii engine config.yaml
-skills:
-  - ~/.local/share/skill-check/current/content/skills/iii-skill-authoring/**/*.md
-  - ~/.local/share/skill-check/current/content/skills/iii-doc-authoring/**/*.md
-```
-
-Browse topics with `skillkit read iii-skill-authoring/<topic>` or `skillkit read iii-doc-authoring/<topic>`. The worker bundle covers `quickstart`, `structure`, `skeleton`, `leaves`, `voice`, `llm-only-blocks`, `ideal-docs`, and `check`. The docs bundle covers `quickstart`, `frontmatter`, `types`, `markers`, `voice`, `llm-only-blocks`, `check`, plus the `diataxis/` writing guides: `doc_workflow`, `doc_tutorial`, `doc_howto`, `doc_reference`, and `doc_explanation`.
-
-### 3. Install the binaries
+### 2. The `iii-skill-render` and `iii-skill-check` binaries
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash
 ```
 
-Pin to a major.minor line or an exact version when you want reproducibility:
+The installer places binaries at `~/.local/bin/iii-skill-{render,check}` and the bundle (rules, Vale styles, skill bundles, templates, scripts) at `~/.local/share/skill-check/current/`. Add `~/.local/bin` to your `PATH` if it isn't already.
+
+### 3. The `iii-skill-authoring` skill bundle
+
+This is the bundle agents (and you) read to know how to write worker partials. Pick whichever surface fits your tooling.
+
+**`skillkit`** — installs both `iii-skill-authoring` and `iii-doc-authoring`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash -s -- 0.1
-# or
-curl -fsSL https://raw.githubusercontent.com/iii-hq/skills-and-validation/latest/scripts/install.sh | bash -s -- 0.1.5
+cd $HOME && npx skillkit add iii-hq/skills-and-validation/content/skills
 ```
 
-Layout after install:
+### 4. The pre-commit hook (optional; per repo)
 
-```
-~/.local/share/skill-check/<version>/      # extracted release tarball
-                          /<version>/bin/  # iii-skill-{check,render} binaries
-                          /<version>/content/   # bundled rules + Vale styles + skill bundles (iii-skill-authoring, iii-doc-authoring)
-                          /<version>/templates/ # .skill-check.yaml + example-worker
-                          /<version>/scripts/   # ci-install.sh, verify-workers.sh, verify-docs.sh, pre-commit-hook.sh, install-hook.sh
-                          /current          # symlink → <version> (re-pointed on every install)
-~/.local/bin/iii-skill-render              # symlink → current/bin/iii-skill-render
-~/.local/bin/iii-skill-check               # symlink → current/bin/iii-skill-check
-```
-
-Add `~/.local/bin` to your `PATH` if it isn't already. Override either default with `SKV_DIR` / `SKV_BIN` env vars before running install.sh:
-
-| Env var   | Default                      | Purpose                                               |
-| --------- | ---------------------------- | ----------------------------------------------------- |
-| `SKV_DIR` | `~/.local/share/skill-check` | Where versioned release dirs and `current` symlink go |
-| `SKV_BIN` | `~/.local/bin`               | Where the `iii-skill-{check,render}` shims land       |
-
-### 4. Install the pre-commit hook
-
-The hook installs into whatever git repo you're currently in, so `cd` into the consumer repo first. Running the script from somewhere else (including a clone of `skills-and-validation` itself) is almost never what you want, and the script will refuse if it detects it's being run from this repo.
+`cd` into the repo whose workers you're validating, then run the installer. The script refuses to install into this repo (it's only meaningful in consumer repos).
 
 ```bash
 cd /path/to/your/consumer-repo
 ~/.local/share/skill-check/current/scripts/install-hook.sh
 ```
 
-The script symlinks `pre-commit-hook.sh` into `.git/hooks/pre-commit`. On every commit, the hook:
+The hook symlinks into `.git/hooks/pre-commit`. On every commit it:
 
 1. Detects staged paths under any worker dir (`<worker>/iii.worker.yaml` + `<worker>/docs/`).
 2. Re-renders each affected worker with `iii-skill-render --write`.
@@ -113,117 +56,24 @@ The script symlinks `pre-commit-hook.sh` into `.git/hooks/pre-commit`. On every 
 4. Runs `iii-skill-check verify-rendered` + `iii-skill-check verify --layers structure,vale`.
 5. Blocks the commit on remaining violations.
 
-**The hook deliberately skips the AI layer**: it's slow and costs API tokens, so commits stay fast. CI runs the AI layer on every PR.
-
-To bypass the hook for a single commit: `git commit --no-verify`.
-
-### Running the AI layer manually
-
-The pre-commit hook never asks for an API key, and the offline `--layers structure,vale` path works without one. To run the AI layer at the terminal, set the env var named in your repo's `.skill-check.yaml` (defaults to `ANTHROPIC_API_KEY`):
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-…
-iii-skill-check verify <worker>                    # all three layers
-iii-skill-check verify <worker> --layers ai        # AI only — fastest signal
-```
-
-CI invokes the AI layer automatically. Set `ANTHROPIC_API_KEY` as a repo secret in your consumer repo for the CI run to use it; without the secret, CI runs structure + vale only and emits a workflow warning.
+The hook deliberately skips the AI layer (slow, costs tokens). CI runs the AI layer on every PR.
 
 ### Upgrading
 
-Re-run `install.sh` whenever a new release lands. The `latest` tag floats to the most recent stable release, so the same one-liner installs the new version and re-points the symlinks.
-
-Both binaries check at runtime whether a newer release is available (via `https://api.github.com/repos/iii-hq/skills-and-validation/releases/latest`, cached for 24h at `~/.cache/skill-check/update-check.json`). When out of date, the binary prints the install command and exits with code 2. Pass `--allow-old-version` to proceed on the older binary anyway:
-
-```bash
-iii-skill-check verify <worker> --allow-old-version
-```
-
-To suppress the check entirely (offline runs, CI environments, scripted batch invocations), set `SKV_NO_UPDATE_CHECK=1`. The composite action and `scripts/test-e2e.sh` set this automatically; only interactive local runs hit the API.
+Re-run install steps 2 and 3.
 
 ---
 
-## Layout
+## Configure your repo
 
-```bash
-crates/iii-skill-core    — shared lib (render, structure, vale, ai, config, bundle)
-crates/iii-skill-render  — render-only binary (no network deps)
-crates/iii-skill-check   — verify + verify-rendered binary (Vale + AI)
-content/                 — project-rules, styles, skills/, .vale.ini
-templates/               — .skill-check.yaml + example-worker the consumer copies
-fixtures/                — intentionally broken/targeted workers used by tests
-scripts/                 — shared between the composite action and pre-commit hook
-action.yml               — composite action consumed via `uses: iii-hq/skills-and-validation@v1`
-```
+Two files per consumer repo: `.skill-check.yaml` at the root, and a GitHub Actions workflow.
 
----
+### `.skill-check.yaml`
 
-## Configuration: `.skill-check.yaml`
-
-Each consumer repo ships one `.skill-check.yaml` at the root that contains the targets it validates. For worker mode that's the parent of the worker directories; for docs mode it's the docs root. The validator binary, the composite action, and the pre-commit hook all read it as the single source of truth for which release of `skills-and-validation` to use, which mode applies, and how the AI layer authenticates.
-
-See `templates/.skill-check.yaml` for an example file.
-
-| Field                      | Required | Purpose                                                                                                                                                 |
-| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`                  | yes      | Schema version of `.skill-check.yaml` itself (integer). `1` = implicit worker mode. `2` = the `mode` field below is required.                          |
-| `mode`                     | v2 only  | `worker` or `docs`. v1 schemas don't carry this field and resolve to `worker`.                                                                          |
-| `ai_check.provider`        | yes      | LLM provider for the AI layer. Currently only `anthropic` is supported.                                                                                 |
-| `ai_check.model`           | yes      | Anthropic model id (e.g. `claude-opus-4-7`).                                                                                                            |
-| `ai_check.api_key_env_var` | yes      | Name of the env var carrying the API key. The validator, the composite action, `scripts/verify-workers.sh` / `scripts/verify-docs.sh`, and `scripts/test-e2e.sh` all read this same field. |
-| `ai_check.max_tokens`      | yes      | Output token budget per AI call.                                                                                                                        |
-| `docs.include`             | docs     | List of glob patterns for sources to include (relative to the docs root). Required when `mode: docs`.                                                   |
-| `docs.exclude`             | no       | List of glob patterns evaluated after `docs.include` to drop matches.                                                                                   |
-| `rules.path`               | no       | Local override for `project-rules/`. Omit to use the rules bundled with the released validator.                                                         |
-| `styles.path`              | no       | Local override for the Vale `styles/` dir. Omit to use the bundled styles.                                                                              |
-
-Pin the release in your workflow file via `uses: iii-hq/skills-and-validation@v0.3` (floats to the latest 0.3.x patch) or `@v0.3.0` (exact). Bump `version` only when the schema itself changes; most consumers leave it alone.
-
-### Modes
-
-Worker and docs are the same architecture pointed at different content. Both:
-
-- Are configured by `.skill-check.yaml` at the relevant root.
-- Are iterated by globs at the action level (`workers-glob` / `docs-glob`).
-- Run the same render → verify → optional auto-commit pipeline.
-- Use the same structure / Vale / AI layers (the rule sets adjust per mode + per Diataxis type).
-
-What differs is the unit and the rendered artifacts:
-
-| | Worker mode | Docs mode |
-| --- | --- | --- |
-| Unit | A worker dir (one `iii.worker.yaml`) | One `.md` / `.mdx` doc |
-| Sources | `<worker>/docs/*.md`, `iii.worker.yaml`, `config.yaml` | The doc itself, plus its YAML frontmatter |
-| Rendered artifacts | `<worker>/README.md`, `<worker>/skill.md`, `<worker>/skills/*.md` | `<source>.skill.md` sibling next to each doc |
-| Action input scope | `workers-glob` (default `*/iii.worker.yaml`) | `docs-glob` (default `**/*.md **/*.mdx`) |
-| `.skill-check.yaml` schema | v1 (no `mode`) or v2 with `mode: worker` | v2 with `mode: docs` + `docs.include`/`docs.exclude` |
-
-#### Docs mode specifics
-
-Each in-scope doc starts with YAML frontmatter:
-
-```mdx
----
-title: "Build a real-time todo app"
-description: "Step-by-step build of a real-time todo using iii streams."
-owner: "devrel"
-type: "tutorial"
----
-```
-
-`type` selects the Diataxis ruleset (`tutorial`, `how-to`, `reference`, `explanation`) and is fed into the AI layer's per-artifact prompt. Required: `title`, `description`, `type`. Optional: `owner`.
-
-`.skill-check.yaml` shape:
+Copy from `~/.local/share/skill-check/current/templates/.skill-check.yaml` and edit. Worker-mode minimum:
 
 ```yaml
-version: 2
-mode: docs
-docs:
-  include:
-    - "**/*.md"
-    - "**/*.mdx"
-  exclude:
-    - "**/CHANGELOG.md"
+version: 1
 ai_check:
   provider: anthropic
   model: claude-opus-4-7
@@ -231,135 +81,21 @@ ai_check:
   max_tokens: 6000
 ```
 
-Markers (`<!-- skill:... -->` HTML comments) override the globs at the doc level or filter sections at the heading level:
+| Field                      | Purpose                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------ |
+| `version`                  | Schema version. `1` = worker mode (implicit). `2` requires the `mode` field below.               |
+| `mode`                     | v2 only. `worker` or `docs`. Leave unset on v1 for worker mode.                                  |
+| `ai_check.provider`        | Currently only `anthropic`.                                                                      |
+| `ai_check.model`           | Anthropic model id, e.g. `claude-opus-4-7`.                                                      |
+| `ai_check.api_key_env_var` | Env var holding the API key. Read by the validator, the action, and `scripts/verify-workers.sh`. |
+| `ai_check.max_tokens`      | Output token budget per AI call.                                                                 |
 
-| Marker                                        | Scope     | Effect                                                                                                            |
-| --------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------- |
-| `<!-- skill:include-doc -->`                  | doc       | Pulls this doc in when `docs.include` missed it. `docs.exclude` still wins.                                       |
-| `<!-- skill:exclude-doc -->`                  | doc       | Drops this doc from the skill set (overrides `docs.include`).                                                     |
-| `<!-- skill:include-sections-by-default -->`  | file      | Default if absent. Every section is in the skill unless excluded.                                                 |
-| `<!-- skill:exclude-sections-by-default -->`  | file      | No section is in the skill unless explicitly included.                                                            |
-| `<!-- skill:include-section -->`              | heading   | Keeps this heading's section regardless of the file-level default.                                                |
-| `<!-- skill:exclude-section -->`              | heading   | Drops this heading's section regardless of the file-level default.                                                |
+### GitHub Actions workflow
 
-Section markers can sit on the heading line (`## Internals <!-- skill:exclude-section -->`) or on their own line within the section. The renderer drops every recognised marker line from the rendered output; heading text stays.
-
-The full authoring guide is in `content/skills/iii-doc-authoring/`. Browse via `skillkit read iii-doc-authoring/<topic>` after installing the bundle.
-
----
-
-## LLM-only blocks
-
-Mark spans visible in skill artifacts (`skill.md`, `skills/*.md`, `<source>.skill.md`) but hidden from the human-facing rendering.
-
-### Worker `.md` partials — both forms supported
-
-Worker partials (`docs/intro.md`, `docs/quickstart.md`, `docs/leaves/*.md`) are never rendered to humans directly. The renderer produces `README.md` (humans) and `skill.md` / `skills/*.md` (LLMs) from the same partials, so any form works:
-
-| Shape  | HTML form                                            |
-| ------ | ---------------------------------------------------- |
-| Block  | `<!-- llm-only:start -->` … `<!-- llm-only:end -->`  |
-| Inline | `<!-- llm-only: short note -->`                      |
-
-```markdown
-## Setup
-
-Run `iii worker add foo` to install.
-
-<!-- llm-only:start -->
-Prefer `get` over `set` for read-only flows; `set` invalidates the cache.
-<!-- llm-only:end -->
-```
-
-In the README the block is invisible (HTML comments don't render). In the skill artifact both marker lines are dropped and the inner prose appears as a normal paragraph.
-
-### Docs-mode `.mdx` sources — inline form only
-
-`.mdx` files are rendered to humans by Mintlify *directly* — the docs site shows the raw source after MDX processing. **Only the single-line MDX-comment inline form actually hides content from humans there:**
-
-```mdx
-The worker exposes `set_token`. {/* llm-only: call this before any other op; tokens cache for 60s */}
-```
-
-Mintlify removes the entire `{/* … */}` comment, so the inline payload is invisible to readers. The `<source>.skill.md` sibling that `iii-skill-render` produces expands the comment to its inner text so the LLM sees it.
-
-**Do not use a block form in `.mdx` files.** Both shapes below leak the payload to the docs site:
-
-```mdx
-{/* llm-only:start */}
-This prose renders as plain text to humans on the site.
-{/* llm-only:end */}
-```
-
-The markers are each their own single-line comment (invisible), but the prose between them is regular MDX content that Mintlify renders normally. Mintlify also does not collapse multi-line `{/* … */}` blocks into a single comment, so the wrapping form does not help. There is no way to hide a multi-line LLM-only block in MDX today — keep the payload to a short single-line inline comment, or move it to a worker `.md` partial.
-
-The HTML inline form also works in `.md` partials when you want a short LLM-only note next to prose humans should see:
-
-```markdown
-The worker exposes `set_token`. <!-- llm-only: call this before any other op; tokens cache for 60s -->
-```
-
-README: `The worker exposes set_token.` (comment hidden).
-Skill: `The worker exposes set_token. call this before any other op; tokens cache for 60s` (comment expanded to its inner text).
-
-### Relationship to `skill:...` markers
-
-The `skill:...` markers (above, docs mode only) decide *whether* a doc or section enters the skill set at all. `llm-only` decides *which spans of an in-scope source* are LLM-only versus shared with the README. They compose: an `llm-only` block inside an `<!-- skill:exclude-section -->`d section still gets dropped, because the whole section was excluded.
-
-The full authoring guides ship in `content/skills/iii-skill-authoring/llm-only-blocks.md` (worker mode) and `content/skills/iii-doc-authoring/llm-only-blocks.md` (docs mode).
-
----
-
-## Human-only blocks
-
-Inverse of `llm-only`: spans visible in the human-facing rendering (worker `README.md`, Mintlify-rendered docs source) but stripped from every LLM-facing artifact (`skill.md`, `skills/*.md`, `<source>.skill.md`). Applies in both worker and docs mode with no special casing.
-
-Same two shapes as `llm-only`, in both comment forms; pick the one that matches the source extension:
-
-| Shape  | HTML form (`.md`)                                            | MDX form (`.mdx`)                                            |
-| ------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| Block  | `<!-- human-only:start -->` … `<!-- human-only:end -->`      | `{/* human-only:start */}` … `{/* human-only:end */}`        |
-| Inline | `<!-- human-only: short note -->`                            | `{/* human-only: short note */}`                             |
-
-Block form, for a maintainer note humans should see in the README but the agent shouldn't:
-
-```markdown
-## Setup
-
-Run `iii worker add foo` to install.
-
-<!-- human-only:start -->
-**Heads-up for maintainers:** the legacy `foo` cli wrapper still lives under
-`tools/legacy/foo.sh`. We're removing it in v3; if you're refactoring this
-worker, delete the wrapper at the same time.
-<!-- human-only:end -->
-```
-
-README: the markers are invisible comments per CommonMark, so a reader sees the heads-up paragraph. `skill.md`: the entire block is gone.
-
-Inline form, where the payload is expanded to visible prose for humans and dropped entirely for the agent:
-
-```markdown
-Add the worker. <!-- human-only: maintainers, this image is rebuilt nightly; bump the tag in iii.lock when you upgrade. -->
-```
-
-README: `Add the worker. maintainers, this image is rebuilt nightly; bump the tag in iii.lock when you upgrade.` (comment expanded). `skill.md`: `Add the worker.` (comment dropped).
-
-**Docs-mode caveat:** Mintlify reads the doc source directly, so the inline form's payload doesn't appear on the published page; the comment stays as an invisible HTML/MDX comment, and no renderer pass runs between the source and Mintlify to expand it. Use the block form in docs sources when you want humans to actually see the content; reserve the inline form for worker `README.md` partials and for maintainer notes the LLM should never see.
-
-Combined with `llm-only`, a single source can carry three audiences cleanly: plain prose (both sides see it), `llm-only` blocks (LLM only), and `human-only` blocks (humans only). The structure layer balance-checks both block types per file, so an unclosed marker fails verify.
-
-The full authoring guides ship in `content/skills/iii-skill-authoring/human-only-blocks.md` (worker mode) and `content/skills/iii-doc-authoring/human-only-blocks.md` (docs mode).
-
----
-
-## Use it in your repo
-
-Add this to a workflow file in the consumer repo, e.g. `.github/workflows/skill-check.yml`:
+Copy `~/.local/share/skill-check/current/content/github_workflows_example.yml` to `.github/workflows/skill-check.yml` and pin the action ref. The minimum:
 
 ```yaml
 name: skill-check
-
 on:
   pull_request:
   push:
@@ -367,11 +103,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests:
-    write # opt-in: enables the sticky PR comment.
-    # Omit to keep just inline annotations + the run summary.
-  actions: write # required for the persistent AI skip-cache (actions/cache).
-  # Omit to disable the cache — every push re-runs every AI check.
+  pull-requests: write # opt-in: enables the sticky PR comment
+  actions: write # opt-in: persistent AI skip-cache
 
 jobs:
   skill-check:
@@ -383,185 +116,346 @@ jobs:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### What the consumer's PR shows
+Set `ANTHROPIC_API_KEY` as a repo secret so the AI layer runs in CI. Without it, CI runs structure + Vale only and emits a workflow warning.
 
-Three layers of feedback, all driven by the validator's existing per-violation output:
+`workers-glob` defaults to `*/iii.worker.yaml`. Override it (or set `config-path`) for non-default layouts. Full input reference under [Action inputs](#action-inputs).
 
-| Surface                         | Permission needed      | What appears                                                                                                       |
-| ------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Inline annotations (Files diff) | none (always-on)       | red squiggle on each error line, yellow squiggle on each warning line, on the `path:line` the validator flagged    |
-| Run summary (Checks tab)        | none (always-on)       | markdown table of every violation with a `Severity` column + `N verified, M skipped`                               |
-| Sticky PR comment               | `pull-requests: write` | same markdown table, headlined `N errors, M warnings across the verified workers.`, updated in place on each push  |
-| Persistent AI skip-cache        | `actions: write`       | unchanged artifacts skip the AI call on subsequent pushes; the cache survives across PR runs via `actions/cache`. Omit to disable — every push re-runs every AI check. |
+---
 
-Annotations and step summary are processed by the runner itself: no token, no API call, no opt-in. The PR-comment step uses the consumer's default `GITHUB_TOKEN` and runs only on `pull_request` events; without `pull-requests: write` it no-ops via `continue-on-error: true` rather than failing the run.
+## Author a worker's README and SKILLs
 
-#### Severity: errors vs warnings
+A worker that uses this validator keeps its SKILL.md and README.md source material under `docs/`. You edit short partials; the renderer produces three artifacts. Never edit the rendered files by hand.
 
-Each violation carries a severity that determines whether it blocks the build:
+### Use the iii-skill-authoring skill
 
-- **Error**: fails the run (exit non-zero). Renders as a red `::error` annotation. Used for: structure violations, AI failures, the `Terminology.*` slop lists, em-dash, forbidden terms, and the quadrant-specific `Diataxis.*` rules (HowTo, Explanation, Reference, Tutorial, and their per-quadrant drift checks).
-- **Warning**: surfaces in the same channels but does not fail the run (exit 0 when only warnings are present). Renders as a yellow `::warning` annotation. Used for cross-quadrant signal where context decides whether it's a real violation; currently only `Diataxis.CrossContamination` ("tutorial-style phrasing" anywhere) emits at this level.
+The bundle in `content/skills/iii-skill-authoring/` is the canonical reference. After step 3 of [Install](#install), read individual topics:
 
-When only warnings fire, the run prints `verify clean across [layers] for <target> (N warning(s))` and exits 0. The AI layer is currently error-only ([#6](https://github.com/iii-hq/skills-and-validation/issues/6) tracks adding warning support).
+```bash
+skillkit read iii-skill-authoring/quickstart       # what makes a good ## Quickstart
+skillkit read iii-skill-authoring/structure        # the slot order in each rendered artifact
+skillkit read iii-skill-authoring/skeleton         # copy-paste starter for a new worker
+skillkit read iii-skill-authoring/voice            # voice rules (slop lists, banned phrasing)
+skillkit read iii-skill-authoring/leaves           # per-function `docs/leaves/<leaf>.md` bodies
+skillkit read iii-skill-authoring/llm-only-blocks  # spans visible to agents, hidden from humans
+skillkit read iii-skill-authoring/check            # running the validator locally
+```
 
-Validator output is the format the scripts in `scripts/annotate.sh` and `scripts/summary.sh` parse:
+The same files are on disk under `~/.local/share/skill-check/current/content/skills/iii-skill-authoring/` and the engine surfaces them through `iii://` once the `skills:` glob is set. Coding agents in the consumer repo should read these topics before editing partials.
+
+### What to write (inputs)
+
+```
+<worker>/
+├── iii.worker.yaml          # name, language, build characteristics; skills renderer only uses `name`
+├── config.yaml              # worker runtime config; inlined verbatim under ## Configuration
+└── docs/
+    ├── intro.md             # intro paragraph(s) inserted after the title (README + skill.md)
+    ├── quickstart.md        # body of ## Quickstart (README only)
+    ├── companions.md        # appended inside "## Install" and covers common workers that a user
+                             # or agent may want to use alongside this worker (optional).
+    ├── migration.md         # body of ## Migration notes (optional, README only)
+                             # Used to document any breaking changes that require migration steps.
+    └── leaves/
+        └── <leaf>.md        # body of skills/<leaf>.md, you can write any number of leaves
+                             # they cover specifics that individual commands that an agent needs to
+                             # know how to do (ex: enqueue.md, chmod.md).
+                             # They DO NOT cover function signatures, outputs, or other API-level documentation.
+                             # They ARE (like the skills) intended to be a how-to do something.
+                             # They CAN be multi-step common actions like `check-queue-success.md`.
+```
+
+Notes on the inputs:
+
+- **`docs/intro.md`** — one or two short paragraphs: what the worker does, who calls it, the single most important thing it gives you. Can contain `<!-- llm-only:start --> ... <!-- llm-only:end -->` blocks for agent-only routing hints.
+- **`docs/quickstart.md`** — the meat of the README. Show one fenced code block per SDK language (Rust `iii_sdk`, TypeScript `iii-sdk`, Python `iii`), ≤ 30 lines each, with a realistic payload and the expected output/result. One to three functions, chosen for introductory value, not breadth.
+- **`docs/leaves/<leaf>.md`** — the leaf name is the suffix of the function id after the last `::`. `textstats::analyze` → `docs/leaves/analyze.md`. H1 is a topical phrase (`# Sizing text before provider calls`), never the function id. Canonical sections: `## When to use` (three to five bullets of realistic call sites) and `## Notes` (gotchas, edge cases an agent will trip on).
+- **`config.yaml`** — runtime config for the worker itself. The renderer inlines it verbatim under `## Configuration`. It preserves comments and all `config.yaml` entries should contain accompanying comments on usage.
+
+Function signatures, payload schemas, and `RegisterFunction::new("…").description("…")` text are generated by a separate auto-gen system (iii-directory worker). Don't duplicate them in the partials.
+
+### Outputs: what gets rendered
+
+```
+<worker>/
+├── README.md       # published on iii.dev (human-facing)
+├── skill.md        # body for iii://<worker> (agent-facing)
+└── skills/
+    └── <leaf>.md   # body for iii://<worker>/<leaf> (agent-facing)
+```
+
+Each artifact starts with a generated banner comment; everything below it is derived from your partials. Rendered files should never be hand-edited (the structure layer will flag drift and re-renders blow away your edits anyway).
+
+**README.md slot order:**
+
+1. Generated banner.
+2. `# <name>` (from `iii.worker.yaml.name`).
+3. `intro.md`.
+4. `## Install` + `iii worker add <name>` boilerplate, optionally followed by `companions.md`.
+5. `## Quickstart` + `quickstart.md`.
+6. `## Configuration` + code blocked `config.yaml`.
+7. `## Migration notes` + `migration.md` (only if present).
+8. `## Additional Resources`: one bullet per leaf linking `skills/<leaf>.md`. Will include the title (H1) of the .md file and a link to it. (omitted when `docs/leaves/` is empty).
+
+**skill.md slot order** (llm-only blocks unwrapped):
+
+1. Generated banner.
+2. `# <name>`.
+3. `intro.md`.
+4. `companions.md`.
+5. `## Additional Resources` (same leaf bullets as README).
+
+**skills/&lt;leaf&gt;.md slot order:**
+
+1. Generated banner.
+2. `docs/leaves/<leaf>.md` verbatim (with llm-only markers unwrapped).
+
+### Render and verify locally
+
+```bash
+iii-skill-render <worker> --write              # produces README.md, skill.md, skills/*.md
+iii-skill-check verify <worker>                # all three layers (structure + Vale + AI)
+iii-skill-check verify <worker> --layers structure,vale   # offline; no API key needed
+iii-skill-check verify <worker> --layers ai    # AI only — fastest signal after a tweak
+iii-skill-check verify-rendered <worker>       # confirm rendered artifacts match partials
+```
+
+`verify-rendered` re-renders in memory and diffs against the on-disk files. Non-zero exit means an artifact drifted; re-run `iii-skill-render <worker> --write`. The pre-commit hook does this for you on every commit.
+
+For the AI layer, export the key named in your `.skill-check.yaml`:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-…
+```
+
+---
+
+## `llm-only` and `human-only` blocks
+
+A single source partial can carry three audiences cleanly: plain prose (everyone sees it), `llm-only` spans (only the agent-facing artifact gets them), and `human-only` spans (only the human-facing render gets them). Both block (`:start`/`:end`) and inline forms are implemented for both directives.
+
+| Shape  | HTML form (worker `.md`)                                | MDX form (`.mdx`)                                     |
+| ------ | ------------------------------------------------------- | ----------------------------------------------------- |
+| Block  | `<!-- llm-only:start -->` … `<!-- llm-only:end -->`     | `{/* llm-only:start */}` … `{/* llm-only:end */}`     |
+|        | `<!-- human-only:start -->` … `<!-- human-only:end -->` | `{/* human-only:start */}` … `{/* human-only:end */}` |
+| Inline | `<!-- llm-only: short note -->`                         | `{/* llm-only: short note */}`                        |
+|        | `<!-- human-only: short note -->`                       | `{/* human-only: short note */}`                      |
+
+Marker lines must each sit on their own line. The structure layer balance-checks both block types per file; an unclosed `:start` fails verify. HTML and MDX forms count together, so a block opened in one form and closed in the other still balances.
+
+### Worker `.md` partials — every form works
+
+Worker partials are never rendered to humans directly. The renderer produces `README.md` (humans) and `skill.md` / `skills/*.md` (agents) from the same source, so block and inline forms both work fully for both `llm-only` and `human-only`. Use whichever fits the payload.
+
+```markdown
+## Quickstart
+
+This worker does X. Use `worker::get` and `worker::set`.
+
+<!-- llm-only:start -->
+
+Prefer `get` over `set` for read-only flows; `set` invalidates the cache.
+
+<!-- llm-only:end -->
+
+<!-- human-only:start -->
+
+**Heads-up for maintainers:** the legacy `foo` cli wrapper is under
+`tools/legacy/foo.sh`. It's deprecated.
+
+<!-- human-only:end -->
+```
+
+In the rendered README the `llm-only` block is invisible and the `human-only` block reads as a normal paragraph. In `skill.md` the inverse: `llm-only` body is expanded, `human-only` block is dropped entirely.
+
+Inline form, expanded for the visible side and dropped for the hidden side:
+
+```markdown
+The worker exposes `worker::set_token`. <!-- llm-only: call this before any other op; tokens cache for 60s -->
+Add the worker. <!-- human-only: maintainers, this image is rebuilt nightly; bump the tag in iii.lock. -->
+```
+
+### `.mdx` docs sources exception: Do not use mutli-line tags.
+
+Mintlify treats MDX comments as line-by-line
+
+MDX files in docs mode are rendered to humans directly by Mintlify. Mintlify treats `{/* … */}` as an invisible single-line comment per line; it does not collapse a multi-line `{/* … */}` span into one comment. That asymmetry decides which form works for each directive:
+
+- **`llm-only` in `.mdx`** — only the inline form actually hides from humans:
+
+  ```mdx
+  The worker exposes `set_token`. {/* llm-only: call this before any other op; tokens cache for 60s */}
+  ```
+
+  The block form `{/* llm-only:start */}` … `{/* llm-only:end */}` is still parsed by the renderer (so `skill.md` is correct), but the prose between the markers is regular MDX content that Mintlify renders to readers. The `:start`/`:end` lines themselves are invisible; the body between them leaks. There is no way to hide a multi-line `llm-only` span in MDX today — keep the payload to a short inline comment, or move it to a worker `.md` partial.
+
+- **`human-only` in `.mdx`** — use the block form when you want humans to see the payload:
+
+  ```mdx
+  {/* human-only:start */}
+  Maintainers: this image is rebuilt nightly. Bump the tag in `iii.lock` when you upgrade.
+  {/* human-only:end */}
+  ```
+
+  Mintlify treats both marker lines as invisible comments and renders the body in between as ordinary prose, which is exactly what `human-only` wants for the human-facing side. The renderer then strips the entire block from `<source>.skill.md` so the agent never sees it.
+
+  The inline form `{/* human-only: … */}` does _not_ work in `.mdx` — Mintlify drops the whole comment, so the payload is invisible to readers too. No render pass runs between the source and Mintlify to expand it. Reserve inline `human-only` for worker `.md` partials and for maintainer notes the agent should never see (which is just the dropped-from-`skill.md` behavior, with no human surface).
+
+Full authoring guides ship under `content/skills/iii-skill-authoring/llm-only-blocks.md` (worker mode) and `content/skills/iii-doc-authoring/llm-only-blocks.md` (docs mode); `human-only-blocks.md` exists in both bundles. Read via `skillkit read iii-skill-authoring/llm-only-blocks` etc.
+
+### Relationship to `skill:...` markers
+
+The `<!-- skill:... -->` markers (docs mode only) decide _whether_ a doc or section enters the skill set at all. `llm-only` and `human-only` decide _which spans_ of an in-scope source go to which audience. They compose: a marker block inside an `<!-- skill:exclude-section -->` section is dropped regardless, because the whole section is excluded.
+
+---
+
+## Fix errors the validator finds
+
+The validator emits one line per violation in this format:
 
 ```
 <file>:<line>:<severity> — <message>
 ```
 
-`<severity>` is `error` or `warning`. Tooling that scrapes the output can split on the third colon-separated field.
+`<severity>` is `error` (fails the run) or `warning` (surfaces but doesn't fail). AI failures appear under `[AI] <path>` blocks at the end with the model's full violation list.
 
-### Action inputs
+In CI the same violations surface three ways: inline annotations on the Files diff, a markdown table in the Checks tab run summary, and (with `pull-requests: write`) a sticky PR comment that updates in place on each push.
 
-| Input               | Default                  | Description                                                                                                                        |
-| ------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix                                                                                   |
-| `config-path`       | `.skill-check.yaml`      | Path to the `.skill-check.yaml` controlling this run. Override per matrix entry to validate multiple modes in one repo.            |
-| `workers-glob`      | `*/iii.worker.yaml`      | Worker mode: glob of worker manifests to verify. Ignored in docs mode.                                                             |
-| `docs-glob`         | `**/*.md **/*.mdx`       | Docs mode: glob(s) of doc files to verify (space-separated). The binary additionally filters per-file against `docs.include`/`docs.exclude`, so a permissive glob can't slip non-doc files into the renderer. |
-| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                                                                                            |
-| `vale-version`      | `3.14.1`                 | Pinned Vale version                                                                                                                |
-| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                            |
-| `write`             | `false`                  | Auto-render and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`.         |
-| `scope`             | `all`                    | `all` validates every artifact matching the glob; `pr-diff` (PR events only) restricts to files changed against the merge base. A diff that touches any `.skill-check.yaml` falls back to full scan. In worker mode, a changed file under `<worker-dir>/` validates the whole worker since rendering is per-worker. |
+### Common error categories and how to fix them
 
-The action auto-detects the mode by reading the `.skill-check.yaml` named by `config-path`. Worker-mode consumers leave `docs-glob` at its default (and it's ignored); docs-mode consumers leave `workers-glob` at its default (also ignored).
+**Vale slop / marketing language** (`Terminology.SlopMarketing`, `Terminology.SlopMagic`, `Terminology.SlopEase`, `Terminology.SlopConnection`, `Terminology.SlopFlow`)
 
-#### Validating both modes in one repo (matrix)
-
-Repos that mix worker dirs and docs run the action multiple times via a matrix strategy, with one entry per controlling config. The sticky PR comment is keyed off `config-path`, so each matrix run gets its own comment instead of clobbering the previous one.
-
-```yaml
-jobs:
-  skill-check:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - config-path: .skill-check.yaml             # workers at the repo root
-          - config-path: docs/.skill-check.yaml         # docs under docs/
-            docs-glob: docs/**/*.md docs/**/*.mdx
-    steps:
-      - uses: actions/checkout@v5
-      - uses: iii-hq/skills-and-validation@v0.3
-        with:
-          config-path: ${{ matrix.config-path }}
-          docs-glob: ${{ matrix.docs-glob || '**/*.md **/*.mdx' }}
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+textstats/docs/intro.md:3:error — Avoid marketing/anthropomorphic phrasing 'blazing fast'. Use concrete, technical language.
 ```
 
-Each matrix entry produces an independent status check, so branch-protection rules can require both to pass.
+Rewrite with concrete technical language. `blazing fast` → `sub-millisecond at p99`. `effortless` → drop the adjective and show the call. `wire up X to Y` → `register X; Y invokes it`. The full token lists live in `~/.local/share/skill-check/current/content/styles/Terminology/`.
 
-### Render-then-verify ordering
+**Em dashes** (`Terminology.EmDash`)
 
-The action always re-renders worker docs in the CI workspace *before* running `verify`. Without this, an out-of-sync `README.md` could mask voice or structure violations that exist in `docs/` but haven't been propagated to the rendered artifacts yet, so verify would happily pass on the stale README while real errors sat unflagged in `docs/intro.md`. Rendering first means verify always operates on artifacts that reflect the current `docs/` content.
+Rewrite with commas, parentheses, periods, or colons. The rule is at error level.
 
-This is independent of `write:`. The in-tree render runs in both modes. What `write` controls is whether the rendered diff gets committed back to the PR branch.
+**Forbidden terms** (`Terminology.ForbiddenTerms`, `Terminology.BackendSoftware`)
 
-### Auto-fix mode (opt-in)
+Includes the bare term `telemetry` (disambiguate: `OpenTelemetry` / `observability` for traces/metrics/logs, or `iii-telemetry` for usage analytics) and a handful of backend-software terms with project-specific alternates.
 
-With `write: true` plus `contents: write`, the action commits the rendered diff back to the PR branch, but only when `verify` passed first. The bot never pushes content the action hasn't validated, so a `chore: auto-render worker docs` commit on the branch is always known-good output.
+**Diataxis voice drift in a how-to** (`Diataxis.HowTo`, `Diataxis.CrossContamination`)
 
-```yaml
-permissions:
-  contents: write # required for auto-fix
-  pull-requests: write # required for the sticky PR comment
-  actions: write # required for the persistent AI skip-cache
+Worker partials are how-tos. Phrases like `in this guide you will learn` or `step 1`, `step 2` are tutorial framing and get flagged. Rewrite as direct instructions: `Run X.`, `Then Y.`. `CrossContamination` warnings are advisory; the others are errors.
 
-jobs:
-  skill-check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref:
-            ${{ github.head_ref }} # check out the PR branch directly
-            # (not the merge commit) so push-back lands
-      - uses: iii-hq/skills-and-validation@v0.3
-        with:
-          write: true
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-```
+**Structure violations** (structure layer)
 
-The follow-up commit doesn't trigger another workflow run (GitHub's default `GITHUB_TOKEN` doesn't fire downstream `push`/`pull_request` events). That's fine because the action already validated the content before pushing.
+Missing or out-of-order sections in `README.md`, install command doesn't match `iii.worker.yaml.name`, source-build instructions in the rendered output, an `iii://<name>/<leaf>` link that doesn't resolve, or an unbalanced llm-only marker. Most of these mean a rendered file was hand-edited or a partial drifted from the slot order in [Outputs](#outputs-what-gets-rendered). Re-render and fix the source partial.
 
-Forks: write mode only works on PRs opened from the same repository; the consumer's `GITHUB_TOKEN` can't push to a fork. Validation-only mode (`write: false`, the default) works for both. In read-only mode, drift between `docs/` and rendered artifacts is reported as a workflow failure so the consumer knows to re-render locally and push.
+**Unbalanced llm-only block** (structure layer)
 
-#### When the bot auto-commits while you're working
+Every `llm-only:start` needs a matching `llm-only:end` on its own line. HTML and MDX forms count together, so you can open with one form and close with the other.
 
-If you push a source change and the bot's `chore: auto-render skill artifacts` commit lands before your next push, your local branch is one commit behind. Plain `git pull --rebase` works as long as your local commits didn't touch the rendered artifacts (`README.md`, `skill.md`, `skills/*.md`, or `*.skill.md`). When they did (typically because you ran the renderer locally before committing), rebase will conflict on those files.
+**AI layer failure** (`[AI] <path>`)
 
-The safe one-liner is to rebase preferring the upstream side, since the bot's render is authoritative (it ran on the head commit's sources):
+The AI layer reads the project rules in `content/project-rules/` (voice, general, workers, sdks, …) and reviews each rendered artifact against them. Failures cite specific passages. Treat the model's feedback as a peer review: the surfaced issue is usually real, but the specific rewrite it suggests is a starting point, not the only fix.
+
+**Render drift** (`verify-rendered` non-zero exit)
+
+The on-disk artifact doesn't match what the partials would produce. Run `iii-skill-render <worker> --write`, stage the result, retry.
+
+### When auto-fix mode is on
+
+With `write: true` plus `contents: write` on the action, the bot commits rendered output back to the PR branch (only after `verify` passed). If the bot's `chore: auto-render skill artifacts` commit lands before your next local push, rebase preferring the upstream side (the bot's render is the authoritative one):
 
 ```bash
 git fetch origin
 git rebase -X ours origin/<branch>
 ```
 
-`-X ours` during a rebase resolves conflicts in favour of the side being rebased *onto* (the bot's commit), which is the opposite of the same flag during a merge. If you'd rather not memorise that, the equivalent merge form is:
+`-X ours` during a rebase resolves conflicts in favour of the side being rebased _onto_. Double-check non-artifact files with `git diff @{u}..` before pushing.
 
-```bash
-git pull --no-rebase -X theirs
-```
+### Bypassing
 
-Either way, double-check the result with `git diff @{u}..` before pushing: `-X ours`/`-X theirs` is path-blind, so any conflicts in *non*-artifact files would also be silently resolved that way.
-
-If you'd rather re-render than trust the bot's commit:
-
-```bash
-git pull --rebase
-iii-skill-render <target> --write
-git add <rendered paths>
-git commit --amend --no-edit
-git push --force-with-lease
-```
+- A single commit: `git commit --no-verify`.
+- Re-running only the AI layer after a small tweak: `iii-skill-check verify <worker> --layers ai`.
+- Letting an old binary keep running while you update: pass `--allow-old-version`.
+- Suppressing the update check (offline, CI, batch scripts): `export SKV_NO_UPDATE_CHECK=1`.
 
 ---
 
-## Local end-to-end check
+## Docs mode
+
+The same render → verify → optional auto-commit pipeline also runs against standalone Mintlify-shaped `.md` / `.mdx` documentation. Opt in with `version: 2` and `mode: docs` in `.skill-check.yaml`; each in-scope doc renders into a sibling `<source>.skill.md`. Diataxis ruleset is selected per doc by the frontmatter `type:` field (`tutorial`, `how-to`, `reference`, `explanation`).
+
+Full guide:
+
+```bash
+skillkit read iii-doc-authoring/quickstart
+skillkit read iii-doc-authoring/frontmatter
+skillkit read iii-doc-authoring/types
+skillkit read iii-doc-authoring/markers          # <!-- skill:include-doc --> etc.
+skillkit read iii-doc-authoring/llm-only-blocks  # MDX caveats
+```
+
+Worker and docs modes share the validator binary; what differs is the unit and the rendered artifacts:
+
+|                            | Worker mode                                                       | Docs mode                                            |
+| -------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
+| Unit                       | A worker dir (one `iii.worker.yaml`)                              | One `.md` / `.mdx` doc                               |
+| Sources                    | `<worker>/docs/*.md`, `iii.worker.yaml`, `config.yaml`            | The doc itself, plus its YAML frontmatter            |
+| Rendered artifacts         | `<worker>/README.md`, `<worker>/skill.md`, `<worker>/skills/*.md` | `<source>.skill.md` sibling next to each doc         |
+| Action input scope         | `workers-glob` (default `*/iii.worker.yaml`)                      | `docs-glob` (default `**/*.md **/*.mdx`)             |
+| `.skill-check.yaml` schema | v1 (no `mode`) or v2 with `mode: worker`                          | v2 with `mode: docs` + `docs.include`/`docs.exclude` |
+
+---
+
+## Action inputs
+
+| Input               | Default                  | Description                                                                                                                                                                                                                                                                                                         |
+| ------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`           | from `.skill-check.yaml` | Pinned validator version, without the `v` prefix                                                                                                                                                                                                                                                                    |
+| `config-path`       | `.skill-check.yaml`      | Path to the `.skill-check.yaml` controlling this run. Override per matrix entry to validate multiple modes in one repo.                                                                                                                                                                                             |
+| `workers-glob`      | `*/iii.worker.yaml`      | Worker mode: glob of worker manifests to verify. Ignored in docs mode.                                                                                                                                                                                                                                              |
+| `docs-glob`         | `**/*.md **/*.mdx`       | Docs mode: glob(s) of doc files to verify (space-separated). Filtered per-file against `docs.include`/`docs.exclude`.                                                                                                                                                                                               |
+| `layers`            | `structure,vale,ai`      | Comma-separated subset of layers to run                                                                                                                                                                                                                                                                             |
+| `vale-version`      | `3.14.1`                 | Pinned Vale version                                                                                                                                                                                                                                                                                                 |
+| `anthropic-api-key` | (none)                   | API key for the AI layer; AI is auto-skipped when unset                                                                                                                                                                                                                                                             |
+| `write`             | `false`                  | Auto-render and commit the diff back to the PR branch when sources drift from rendered output. Requires `contents: write`.                                                                                                                                                                                          |
+| `scope`             | `all`                    | `all` validates every artifact matching the glob; `pr-diff` (PR events only) restricts to files changed against the merge base. A diff that touches any `.skill-check.yaml` falls back to full scan. In worker mode, a changed file under `<worker-dir>/` validates the whole worker since rendering is per-worker. |
+
+The action auto-detects mode by reading the `.skill-check.yaml` named by `config-path`. Repos that mix worker dirs and docs run the action multiple times via a matrix strategy with one entry per controlling config; the sticky PR comment is keyed off `config-path` so each entry gets its own comment.
+
+---
+
+## Troubleshooting
+
+**`vale: command not found`.** Vale is required for local runs; see [Install → 1. Vale](#1-vale).
+
+**`verify-rendered` fails after editing a `docs/` partial.** Re-render the worker: `iii-skill-render <worker> --write`. The hook does this automatically on commit.
+
+**Bot keeps auto-committing on top of my pushes.** See [When auto-fix mode is on](#when-auto-fix-mode-is-on). If you'd rather re-render locally than trust the bot, disable `write: true` in your workflow.
+
+**Bundle lookup misses on a moved binary.** `bundle::find_content_root` walks up from the binary looking for `content/` with `project-rules/` and `.vale.ini`. Pass `--rules-dir` and `--vale-config` explicitly to `iii-skill-check verify` if you've relocated the layout.
+
+**Anonymous download returns 404 on a public repo.** Confirm the asset name matches `skills-and-validation-{version}-{target}.tar.gz` exactly. The git tag has the `v` prefix; the asset filename does not.
+
+**`cargo test` fails on path-dependent tests after renaming the repo dir.** `CARGO_MANIFEST_DIR` is baked into the test binary at compile time. Run `cargo clean` to force a rebuild.
+
+---
+
+## Layout (for contributors to this repo)
+
+```
+crates/iii-skill-core    — shared lib (render, structure, vale, ai, config, bundle)
+crates/iii-skill-render  — render-only binary (no network deps)
+crates/iii-skill-check   — verify + verify-rendered binary (Vale + AI)
+content/                 — project-rules, styles, skills/, .vale.ini
+templates/               — .skill-check.yaml + example-worker the consumer copies
+fixtures/                — intentionally broken/targeted workers used by tests
+scripts/                 — shared between the composite action and pre-commit hook
+action.yml               — composite action consumed via `uses: iii-hq/skills-and-validation@v0.3`
+```
+
+Local end-to-end check:
 
 ```bash
 ./scripts/test-e2e.sh                            # offline phases (build, fixtures, scripts)
 ANTHROPIC_API_KEY=sk-ant-… ./scripts/test-e2e.sh # also exercises the live AI layer
 ```
 
-The script reads `api_key_env_var` from `templates/.skill-check.yaml` and auto-loads a matching `.env` file at the repo root if the value isn't already in the shell environment. `.env` is gitignored.
-
-Pass `--clean` if you've just renamed the repo directory (`CARGO_MANIFEST_DIR` is baked into test binaries at compile time and a stale `target/` cache will fail path-dependent tests until rebuilt).
-
----
-
-## Pre-tag checklist
-
-Before pushing `v0.1.0`:
-
-- [ ] `./scripts/test-e2e.sh --clean` exits 0
-- [ ] `ANTHROPIC_API_KEY=sk-ant-… ./scripts/test-e2e.sh` exits 0 (exercises the AI layer)
-- [ ] `git push origin main` is green on `ci.yml` + `dogfood.yml`
-- [ ] `ANTHROPIC_API_KEY` is set as a repo secret (otherwise dogfood's AI layer is silently skipped in CI)
-
-Tagging triggers `release.yml` and is effectively irreversible once consumers pin to the tag.
-
----
-
-## Troubleshooting
-
-**`cargo test` fails on path-dependent tests after renaming the repo dir.**
-`CARGO_MANIFEST_DIR` is baked into the test binary at compile time. After a parent-directory rename, run `cargo clean` to force a rebuild with the new path.
-
-**Vale layer fails with `vale: command not found`.**
-Vale is a hard prerequisite for local runs; see [Setup → 1. Install Vale](#1-install-vale). The composite Action installs it on the runner; locally `brew install vale` or grab a release from https://github.com/errata-ai/vale/releases.
-
-**`cross install --locked` fails in CI.**
-cross-rs occasionally lags behind cargo updates. Two fallback options:
-
-1. Pin a known-good version: `cargo install cross --version 0.2.5 --locked`.
-2. Replace cross with `cargo-zigbuild` in `release.yml` (no Docker, single runner builds all four Linux targets).
-
-**Anonymous download returns 404 on a public repo.**
-Confirm the asset name matches `skills-and-validation-{version}-{target}.tar.gz` exactly. The git tag has the `v` prefix; the asset filename does not.
-
-**Bundle lookup misses on local builds.**
-`bundle::find_content_root` walks up from the running binary looking for a `content/` dir with both `project-rules/` and `.vale.ini`. If you've moved the binary outside its bundle layout, pass `--rules-dir` and `--vale-config` explicitly to `iii-skill-check verify`.
+Pass `--clean` if you've renamed the repo directory (`CARGO_MANIFEST_DIR` is baked into test binaries at compile time).

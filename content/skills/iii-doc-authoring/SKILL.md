@@ -1,4 +1,5 @@
 ---
+name: "iii-doc-authoring"
 title: "iii-doc-authoring"
 description: "Skill bundle index for authoring Mintlify-shaped docs that iii-skill-check validates."
 type: "reference"
