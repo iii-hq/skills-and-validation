@@ -76,7 +76,7 @@ fn companions_partial_appears_in_skill_md() {
 }
 
 #[test]
-fn companions_llm_only_block_unwrapped_in_skill_kept_in_readme() {
+fn companions_llm_only_block_dropped_in_readme_unwrapped_in_skill() {
     let tmp = TempDir::new().unwrap();
     let body = "Visible companion line.\n\n<!-- llm-only:start -->\nLLM-only guidance for agents.\n<!-- llm-only:end -->\n";
     write_minimal_worker_with_companions(tmp.path(), "fixture", Some(body));
@@ -95,16 +95,23 @@ fn companions_llm_only_block_unwrapped_in_skill_kept_in_readme() {
         outputs.skill
     );
 
-    // README: markers preserved verbatim (HTML comments invisible at render
-    // time, but the source text still carries them as tooling metadata).
+    // README: the marker lines are invisible HTML comments, but the prose
+    // between them is regular markdown that would render to humans on
+    // iii.dev / GitHub. The renderer therefore drops both markers AND body.
     assert!(
-        outputs.readme.contains("LLM-only guidance for agents"),
-        "llm-only body absent from README: {}",
+        !outputs.readme.contains("LLM-only guidance for agents"),
+        "llm-only body leaked into README: {}",
         outputs.readme
     );
     assert!(
-        outputs.readme.contains("<!-- llm-only:start -->"),
-        "expected llm-only markers preserved in README: {}",
+        !outputs.readme.contains("llm-only:start"),
+        "llm-only marker leaked into README: {}",
+        outputs.readme
+    );
+    // Sanity: the surrounding non-llm-only prose still made it through.
+    assert!(
+        outputs.readme.contains("Visible companion line."),
+        "visible companion prose absent from README: {}",
         outputs.readme
     );
 }

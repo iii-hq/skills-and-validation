@@ -267,11 +267,14 @@ Prefer `get` over `set` for read-only flows; `set` invalidates the cache.
 
 In the rendered README the `llm-only` block is invisible and the `human-only` block reads as a normal paragraph. In `skill.md` the inverse: `llm-only` body is expanded, `human-only` block is dropped entirely.
 
-Inline form, expanded for the visible side and dropped for the hidden side:
+Inline form: each comment must be on a line of its own. The renderer expands it to its payload for the visible side and drops it on the hidden side. Embedded mid-paragraph inline comments are not parsed and pass through verbatim.
 
 ```markdown
-The worker exposes `worker::set_token`. <!-- llm-only: call this before any other op; tokens cache for 60s -->
-Add the worker. <!-- human-only: maintainers, this image is rebuilt nightly; bump the tag in iii.lock. -->
+The worker exposes `worker::set_token`.
+<!-- llm-only: call this before any other op; tokens cache for 60s -->
+
+Add the worker.
+<!-- human-only: maintainers, this image is rebuilt nightly; bump the tag in iii.lock. -->
 ```
 
 ### `.mdx` docs sources exception: Do not use mutli-line tags.
@@ -280,10 +283,11 @@ Mintlify treats MDX comments as line-by-line
 
 MDX files in docs mode are rendered to humans directly by Mintlify. Mintlify treats `{/* … */}` as an invisible single-line comment per line; it does not collapse a multi-line `{/* … */}` span into one comment. That asymmetry decides which form works for each directive:
 
-- **`llm-only` in `.mdx`** — only the inline form actually hides from humans:
+- **`llm-only` in `.mdx`** — only the inline form actually hides from humans, and the comment must be on a line of its own (mid-paragraph inline comments are not parsed):
 
   ```mdx
-  The worker exposes `set_token`. {/* llm-only: call this before any other op; tokens cache for 60s */}
+  The worker exposes `set_token`.
+  {/* llm-only: call this before any other op; tokens cache for 60s */}
   ```
 
   The block form `{/* llm-only:start */}` … `{/* llm-only:end */}` is still parsed by the renderer (so `skill.md` is correct), but the prose between the markers is regular MDX content that Mintlify renders to readers. The `:start`/`:end` lines themselves are invisible; the body between them leaks. There is no way to hide a multi-line `llm-only` span in MDX today — keep the payload to a short inline comment, or move it to a worker `.md` partial.

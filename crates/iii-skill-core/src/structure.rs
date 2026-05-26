@@ -99,6 +99,10 @@ pub fn check(dir: &Path) -> anyhow::Result<Vec<Violation>> {
         violations.extend(check_iii_links(label, content, name, &known_leaves));
     }
 
+    for (leaf, body) in &leaves {
+        violations.extend(check_leaf_h1(leaf, body));
+    }
+
     Ok(violations)
 }
 
@@ -208,6 +212,29 @@ fn check_human_only_balance(label: &str, content: &str) -> Vec<Violation> {
         label,
         None,
         format!("unbalanced human-only blocks: {starts} start markers, {ends} end markers"),
+    )]
+}
+
+/// Each rendered `skills/<leaf>.md` must carry a top-level H1. The renderer
+/// uses that heading as link text in the README and skill.md
+/// `## Additional Resources` sections; if it's missing, the link falls back
+/// to the bare leaf name (e.g. `analyze`), which reads as an internal id
+/// rather than a topical phrase. The check runs on the rendered file (the
+/// generated banner is skipped), so a heading hidden inside an `llm-only`
+/// or `human-only` block won't count — those have already been stripped
+/// for the leaf artifact. Worker mode only; docs mode has its own H1
+/// expectations elsewhere.
+fn check_leaf_h1(leaf: &str, body: &str) -> Vec<Violation> {
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("# ") {
+            return Vec::new();
+        }
+    }
+    vec![Violation::error(
+        format!("skills/{leaf}.md"),
+        None,
+        "missing top-level H1 (the renderer uses the H1 as link text in `## Additional Resources`; add a topical phrase, e.g. `# Sizing text before provider calls`)",
     )]
 }
 

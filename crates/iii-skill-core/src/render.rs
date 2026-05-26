@@ -1,5 +1,5 @@
 use crate::human_only::{strip_human_only, unwrap_human_only};
-use crate::llm_only::unwrap_llm_only;
+use crate::llm_only::{strip_llm_only, unwrap_llm_only};
 use anyhow::Context;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -41,7 +41,14 @@ pub fn render_worker(dir: &Path) -> anyhow::Result<RenderOutput> {
     let mut leaf_links: Vec<(String, String)> = Vec::new();
     for (leaf_name, leaf_path) in list_leaves(dir)? {
         let body = read_partial(&leaf_path)?;
-        let title = extract_h1(&body).unwrap_or_else(|| leaf_name.clone());
+        // Extract the H1 from the body with both audience-specific blocks
+        // stripped, so a title that lives only inside an `llm-only` or
+        // `human-only` block never appears as link text in the README or
+        // skill.md `## Additional Resources` section. Missing H1 falls
+        // back to leaf_name here so render still produces an artifact;
+        // the structure layer flags the absence as an error.
+        let stripped_for_title = strip_human_only(&strip_llm_only(&body));
+        let title = extract_h1(&stripped_for_title).unwrap_or_else(|| leaf_name.clone());
         leaf_links.push((leaf_name.clone(), title));
         let rendered = render_leaf(&leaf_name, &body);
         leaves.insert(leaf_name, rendered);
@@ -74,14 +81,16 @@ fn render_readme(
     migration: Option<&str>,
     leaf_links: &[(String, String)],
 ) -> String {
-    // Run each markdown partial through unwrap_human_only so block
-    // markers vanish (their body stays) and inline `<!-- human-only:
-    // text -->` payloads expand into visible prose for the README
-    // reader. config.yaml is YAML inside a code fence; skip it.
-    let intro = unwrap_human_only(intro);
-    let quickstart = unwrap_human_only(quickstart);
-    let companions = companions.map(unwrap_human_only);
-    let migration = migration.map(unwrap_human_only);
+    // Two-pass strip for each markdown partial: first drop every
+    // `llm-only` block + inline (markers AND body — the README is the
+    // human-facing artifact, so LLM-only prose must not leak through as
+    // visible markdown). Then `unwrap_human_only` removes human-only
+    // markers and expands human-only inlines so the README reader sees
+    // their payload. config.yaml is YAML inside a code fence; skip it.
+    let intro = unwrap_human_only(&strip_llm_only(intro));
+    let quickstart = unwrap_human_only(&strip_llm_only(quickstart));
+    let companions = companions.map(|c| unwrap_human_only(&strip_llm_only(c)));
+    let migration = migration.map(|m| unwrap_human_only(&strip_llm_only(m)));
 
     let mut install_section = format!(
         "## Install\n\n```bash\niii worker add {name}\n```\n\n`iii worker add` fetches the binary, writes a config block into the engine's `config.yaml`, and the engine starts the worker on the next `iii worker start`."
