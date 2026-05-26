@@ -37,6 +37,6 @@ The Diataxis ruleset adjusts which voice patterns are flagged based on `type`:
 
 The AI layer reads each rendered skill artifact with the doc's `type:` baked into the per-artifact prompt. If the AI flags a phrase that you believe is correct for the category:
 
-1. Re-check whether the doc's `type:` matches what you actually wrote. A page tagged `reference` that reads like a tutorial will get flagged for everything.
+1. Re-check whether the doc's `type:` matches what you wrote. A page tagged `reference` that reads like a tutorial will get flagged for everything.
 2. If `type:` is right, the wording probably *is* drifting. Rephrase to fit the category.
 3. If you're sure the AI is wrong, that's a model-judgement disagreement; the structure + Vale layers don't catch this, so a one-off override isn't supported. File an issue against the rule the AI cited.

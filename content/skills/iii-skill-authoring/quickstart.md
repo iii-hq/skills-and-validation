@@ -15,7 +15,7 @@ The `## Quickstart` section is the meat of a worker README. It moves the reader 
 - Show one to three functions, chosen for introductory value, not breadth. A worker with twenty functions still shows two.
 - Each shown call demonstrates three things:
   - The function id, e.g., `textstats::analyze`.
-  - A realistic payload (the kind a caller would actually send, not `{}` or `{ "key": "value" }`).
+  - A realistic payload (the kind a caller would send, not `{}` or `{ "key": "value" }`).
   - The expected output shape, in a comment, a `println!`, or a follow-up paragraph.
 
 ## Skeletons

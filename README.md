@@ -283,7 +283,7 @@ Mintlify treats MDX comments as line-by-line
 
 MDX files in docs mode are rendered to humans directly by Mintlify. Mintlify treats `{/* … */}` as an invisible single-line comment per line; it does not collapse a multi-line `{/* … */}` span into one comment. That asymmetry decides which form works for each directive:
 
-- **`llm-only` in `.mdx`** — only the inline form actually hides from humans, and the comment must be on a line of its own (mid-paragraph inline comments are not parsed):
+- **`llm-only` in `.mdx`** — only the inline form hides from humans, and the comment must be on a line of its own (mid-paragraph inline comments are not parsed):
 
   ```mdx
   The worker exposes `set_token`.
@@ -302,7 +302,7 @@ MDX files in docs mode are rendered to humans directly by Mintlify. Mintlify tre
 
   Mintlify treats both marker lines as invisible comments and renders the body in between as ordinary prose, which is exactly what `human-only` wants for the human-facing side. The renderer then strips the entire block from `<source>.skill.md` so the agent never sees it.
 
-  The inline form `{/* human-only: … */}` does _not_ work in `.mdx` — Mintlify drops the whole comment, so the payload is invisible to readers too. No render pass runs between the source and Mintlify to expand it. Reserve inline `human-only` for worker `.md` partials and for maintainer notes the agent should never see (which is just the dropped-from-`skill.md` behavior, with no human surface).
+  The inline form `{/* human-only: … */}` does _not_ work in `.mdx` — Mintlify drops the whole comment, so the payload is invisible to readers too. No render pass runs between the source and Mintlify to expand it. Reserve inline `human-only` for worker `.md` partials and for maintainer notes the agent should never see (the dropped-from-`skill.md` behavior, with no human surface).
 
 Full authoring guides ship under `content/skills/iii-skill-authoring/llm-only-blocks.md` (worker mode) and `content/skills/iii-doc-authoring/llm-only-blocks.md` (docs mode); `human-only-blocks.md` exists in both bundles. Read via `skillkit read iii-skill-authoring/llm-only-blocks` etc.
 

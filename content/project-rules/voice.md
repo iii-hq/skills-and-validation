@@ -39,6 +39,14 @@ examples carry the weight.
   look good. State what iii does and let the comparison stand on its own. Vale catches the obvious
   tokens; this rule is for the same idea phrased differently (e.g., "feels stapled together",
   "looks like an afterthought", "shoehorned in").
+- Negation-contrast framing ("it's not X, it's Y"; "not just a queue, but a coordination
+  primitive"; "this isn't about speed, it's about reliability"). State Y directly: say what the
+  thing *is* without first staging what it isn't. The negation adds rhetorical weight, not
+  information. Vale catches the common comma/colon-joined forms; this rule is for the same tic
+  phrased differently (e.g., "less a framework, more a philosophy", "forget X, think Y", a negated
+  sentence immediately followed by its positive restatement). Exception: a genuine disambiguation a
+  reader would otherwise get wrong is fine ("this reads from the working directory, not
+  `~/.iii/`") because the negation carries real information.
 - Promotional capability lists inside non-explainer material. A how-to, install step, or reference
   entry should not pause to introduce a tool with a feature-list bullet block in the shape of
   "X gives your editor / project / system [adjective] [noun]: completions, hover docs, diagnostics,

@@ -27,7 +27,7 @@ Both comment forms are accepted on every marker:
 
 - Maintainer or contributor heads-up that doesn't help an agent execute the task ("we're removing this wrapper in v3", "ping #infra before changing the worker's image").
 - Migration notes that humans need at upgrade time but that would only bloat the agent's context.
-- Editorial commentary about why a default is what it is: useful for a reviewer, irrelevant to an agent that just needs to use the API.
+- Editorial commentary about why a default is what it is: useful for a reviewer, irrelevant to an agent that needs to use the API.
 
 ## When not to use
 

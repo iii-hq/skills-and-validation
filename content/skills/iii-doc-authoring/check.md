@@ -17,7 +17,7 @@ iii-skill-check verify <docs-root> --layers ai        # AI only
 iii-skill-check verify-rendered <docs-root>           # drift check vs siblings
 ```
 
-The binary walks up from `<docs-root>` to the nearest `.skill-check.yaml`, reads `mode: docs`, and dispatches. Pass a single `.md` / `.mdx` file to verify just that one doc, useful for fast iteration during authoring.
+The binary walks up from `<docs-root>` to the nearest `.skill-check.yaml`, reads `mode: docs`, and dispatches. Pass a single `.md` / `.mdx` file to verify only that one doc, useful for fast iteration during authoring.
 
 For files that don't carry frontmatter (project READMEs, CHANGELOGs, contributor guides), use `check-file` and pass the type explicitly:
 

@@ -1,0 +1,15 @@
+extends: existence
+message: "Weak intensifier/hedge '%s' adds emphasis, not information. Cut it or state the claim directly."
+level: warning
+ignorecase: true
+tokens:
+  - actually
+  - basically
+  - essentially
+  - just
+  - needless to say
+  - of course
+  - quite
+  - really
+  - simply
+  - very

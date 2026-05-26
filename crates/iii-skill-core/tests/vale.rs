@@ -79,6 +79,97 @@ fn vale_flags_howto_teaching_phrase_in_skill() {
 }
 
 #[test]
+fn vale_flags_negation_contrast() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("README.md");
+    std::fs::write(
+        &path,
+        "# Test\n\nIt's not a queue, it's a coordination primitive.\n",
+    )
+    .unwrap();
+
+    let artifacts: Vec<&std::path::Path> = vec![&path];
+
+    let violations = iii_skill_core::vale::run(&artifacts, &vale_config()).unwrap();
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.message.to_lowercase().contains("contrast")),
+        "expected a 'not X, it's Y' contrast violation, got: {violations:?}"
+    );
+}
+
+#[test]
+fn vale_does_not_flag_plain_negation_with_caveat() {
+    // A bare negation followed by a "but" caveat is legitimate prose, not
+    // the antithesis tic. NegationContrast must leave it alone.
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("README.md");
+    std::fs::write(
+        &path,
+        "# Test\n\nThe flag is not required, but you can pass it.\n",
+    )
+    .unwrap();
+
+    let artifacts: Vec<&std::path::Path> = vec![&path];
+
+    let violations = iii_skill_core::vale::run(&artifacts, &vale_config()).unwrap();
+    assert!(
+        !violations
+            .iter()
+            .any(|v| v.message.to_lowercase().contains("contrast")),
+        "plain negation-with-caveat should not be flagged, got: {violations:?}"
+    );
+}
+
+#[test]
+fn vale_flags_hedges_as_warnings() {
+    use iii_skill_core::structure::Severity;
+
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("README.md");
+    std::fs::write(
+        &path,
+        "# Test\n\nThis is just a thin wrapper that simply forwards calls.\n",
+    )
+    .unwrap();
+
+    let artifacts: Vec<&std::path::Path> = vec![&path];
+
+    let violations = iii_skill_core::vale::run(&artifacts, &vale_config()).unwrap();
+    let hedge_warnings: Vec<_> = violations
+        .iter()
+        .filter(|v| v.severity == Severity::Warning && v.message.to_lowercase().contains("hedge"))
+        .collect();
+    assert!(
+        hedge_warnings.iter().any(|v| v.message.contains("just")),
+        "expected a hedge warning for 'just', got: {violations:?}"
+    );
+    assert!(
+        hedge_warnings.iter().any(|v| v.message.contains("simply")),
+        "expected a hedge warning for 'simply', got: {violations:?}"
+    );
+}
+
+#[test]
+fn vale_does_not_flag_just_inside_another_word() {
+    // `\bjust\b` must not match "adjust"; the hedge rule is word-bounded.
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("README.md");
+    std::fs::write(&path, "# Test\n\nAdjust the timeout to taste.\n").unwrap();
+
+    let artifacts: Vec<&std::path::Path> = vec![&path];
+
+    let violations = iii_skill_core::vale::run(&artifacts, &vale_config()).unwrap();
+    assert!(
+        !violations
+            .iter()
+            .any(|v| v.message.to_lowercase().contains("hedge")),
+        "'adjust' should not trip the hedge rule, got: {violations:?}"
+    );
+}
+
+#[test]
 fn vale_severity_maps_error_and_warning_distinctly() {
     use iii_skill_core::structure::Severity;
 

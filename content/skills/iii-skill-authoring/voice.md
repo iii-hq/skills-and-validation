@@ -17,7 +17,7 @@ Skill content reaches both human readers (via the published README on iii.dev) a
 ## Never do
 
 - Marketing language. The token list in `styles/Terminology/SlopMarketing.yml` is enforced by Vale at error level: `blazing fast`, `world-class`, `paradigm shift`, and the rest.
-- Mystification claims (`SlopMagic`). Say what actually happens: which function, which trigger, which state scope.
+- Mystification claims (`SlopMagic`). Name the mechanism: which function, which trigger, which state scope.
 - Capability boasts (`SlopEase`). Show the steps, the API, or the trade-offs instead of asserting `effortless` or `trivial`.
 - Connection metaphors (`SlopConnection`). Prefer `register`, `invoke`, `subscribe`, `read`, `write` over `wire up`, `glue`, `bridge`, `weave`.
 - Tutorial-style framing in a how-to (`Diataxis.HowTo`). How-to docs solve a problem; they don't `teach`. Phrases like `in this guide you will learn` are flagged.

@@ -10,7 +10,7 @@ Some context belongs in the skill (visible to AI agents) but not in the publishe
 
 ## MDX (`.mdx`) sources
 
-In docs-mode, `.mdx` files are rendered to humans by Mintlify *directly* — the docs site shows the raw source after MDX processing. **Only the single-line inline form actually hides content from humans there.** The block form (`{/* llm-only:start */}` … `{/* llm-only:end */}`) does *not* work in MDX: each marker is its own single-line comment that Mintlify hides, but the prose between them is regular MDX content and renders normally. Mintlify also does not treat a multi-line `{/* … */}` as a single comment, so wrapping a payload across lines does not help.
+In docs-mode, `.mdx` files are rendered to humans by Mintlify *directly* — the docs site shows the raw source after MDX processing. **Only the single-line inline form hides content from humans there; the block form does not.** The block form (`{/* llm-only:start */}` … `{/* llm-only:end */}`) does *not* work in MDX: each marker is its own single-line comment that Mintlify hides, but the prose between them is regular MDX content and renders normally. Mintlify also does not treat a multi-line `{/* … */}` as a single comment, so wrapping a payload across lines does not help.
 
 Use the inline form:
 
@@ -36,7 +36,7 @@ The schema is documented in `crates/iii-engine-config/src/schema.rs`. Field defa
 <!-- llm-only:end -->
 ```
 
-The README contains just the surrounding prose; the skill artifact contains the prose plus the inner block content.
+The README contains only the surrounding prose; the skill artifact contains the prose plus the inner block content.
 
 ## When to use it
 

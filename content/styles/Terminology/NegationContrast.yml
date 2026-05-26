@@ -1,0 +1,10 @@
+extends: existence
+message: "Avoid the 'not X, it's Y' contrast ('%s'). State what it is directly."
+level: error
+ignorecase: true
+nonword: true
+tokens:
+  # "it's not X, it's Y" / "this is not just X, it's Y" / "they're not X, rather Y"
+  - '\b(it''?s|it is|that''?s|that is|this is|they''?re|they are|we''?re|we are)\s+not\s+(just |only |merely |simply )?[^,;:.]{1,60}[,;:]\s+(it''?s|it is|that''?s|that is|they''?re|they are|we''?re|we are|rather|but rather)\b'
+  # "not just X but (also) Y" / "not only X but Y"
+  - '\bnot\s+(just|only|merely|simply)\s+[^,;:.]{1,60}[,;]?\s+but(\s+also)?\b'
