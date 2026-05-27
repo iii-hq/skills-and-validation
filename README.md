@@ -1,6 +1,6 @@
 # skills-and-validation
 
-Render and validate iii worker docs against the project's voice, structure, and Diataxis rules. You write short markdown partials under `<worker>/docs/`; this project renders them into the worker's `README.md`, `skill.md`, and `skills/*.md`, then verifies the result with Vale and an AI pass on every commit and every PR.
+Render and validate iii worker docs against the project's voice, structure, and Diataxis rules. You write short markdown partials under `<worker>/docs/`; this project renders them into the worker's `README.md` and a single self-contained `skill.md`, then verifies the result with Vale and an AI pass on every commit and every PR.
 
 It also supports a **docs mode** for standalone (Mintlify, Fumadocs, etc.) `.md` / `.mdx` documentation.
 
@@ -52,7 +52,7 @@ The hook symlinks into `.git/hooks/pre-commit`. On every commit it:
 
 1. Detects staged paths under any worker dir (`<worker>/iii.worker.yaml` + `<worker>/docs/`).
 2. Re-renders each affected worker with `iii-skill-render --write`.
-3. Re-stages the rendered `README.md`, `skill.md`, `skills/*.md`.
+3. Re-stages the rendered `README.md` and `skill.md`.
 4. Runs `iii-skill-check verify-rendered` + `iii-skill-check verify --layers structure,vale`.
 5. Blocks the commit on remaining violations.
 
@@ -146,7 +146,7 @@ The same files are on disk under `~/.local/share/skill-check/current/content/ski
 
 ```
 <worker>/
-├── iii.worker.yaml          # name, language, build characteristics; skills renderer only uses `name`
+├── iii.worker.yaml          # name + description + tags feed the searchable frontmatter (all required); plus build characteristics
 ├── config.yaml              # worker runtime config; inlined verbatim under ## Configuration
 └── docs/
     ├── intro.md             # intro paragraph(s) inserted after the title (README + skill.md)
@@ -156,7 +156,7 @@ The same files are on disk under `~/.local/share/skill-check/current/content/ski
     ├── migration.md         # body of ## Migration notes (optional, README only)
                              # Used to document any breaking changes that require migration steps.
     └── leaves/
-        └── <leaf>.md        # body of skills/<leaf>.md, you can write any number of leaves
+        └── <leaf>.md        # inlined under ## Additional HOWTOs in both README and skill.md; write any number
                              # they cover specifics that individual commands that an agent needs to
                              # know how to do (ex: enqueue.md, chmod.md).
                              # They DO NOT cover function signatures, outputs, or other API-level documentation.
@@ -178,41 +178,38 @@ Function signatures, payload schemas, and `RegisterFunction::new("…").descript
 ```
 <worker>/
 ├── README.md       # published on iii.dev (human-facing)
-├── skill.md        # body for iii://<worker> (agent-facing)
-└── skills/
-    └── <leaf>.md   # body for iii://<worker>/<leaf> (agent-facing)
+└── skill.md        # single agent-facing file for iii://<worker> (leaves inlined)
 ```
 
-Each artifact starts with a generated banner comment; everything below it is derived from your partials. Rendered files should never be hand-edited (the structure layer will flag drift and re-renders blow away your edits anyway).
+Two files, no `skills/` directory: each leaf is inlined into both artifacts under `## Additional HOWTOs`. Both files open with an identical YAML frontmatter block — `name`, `description`, `tags`, all sourced from `iii.worker.yaml` — that makes the worker searchable in the registry. Below the frontmatter, each artifact starts with a generated banner comment; everything after that is derived from your partials. Rendered files should never be hand-edited (the structure layer will flag drift and re-renders blow away your edits anyway).
 
 **README.md slot order:**
 
-1. Generated banner.
-2. `# <name>` (from `iii.worker.yaml.name`).
-3. `intro.md`.
-4. `## Install` + `iii worker add <name>` boilerplate, optionally followed by `companions.md`.
-5. `## Quickstart` + `quickstart.md`.
-6. `## Configuration` + code blocked `config.yaml`.
-7. `## Migration notes` + `migration.md` (only if present).
-8. `## Additional Resources`: one bullet per leaf linking `skills/<leaf>.md`. Will include the title (H1) of the .md file and a link to it. (omitted when `docs/leaves/` is empty).
+1. Frontmatter block (`name` / `description` / `tags`).
+2. Generated banner.
+3. `# <name>` (from `iii.worker.yaml.name`).
+4. `intro.md`.
+5. `## Install` + `iii worker add <name>` boilerplate, optionally followed by `companions.md`.
+6. `## Quickstart` + `quickstart.md`.
+7. `## Configuration` + code blocked `config.yaml`.
+8. `## Migration notes` + `migration.md` (only if present).
+9. `## Additional HOWTOs`: each leaf inlined, its `# Title` demoted to `### Title` (omitted when `docs/leaves/` is empty).
 
-**skill.md slot order** (llm-only blocks unwrapped):
+**skill.md slot order** (llm-only blocks unwrapped, human-only dropped):
 
-1. Generated banner.
-2. `# <name>`.
-3. `intro.md`.
-4. `companions.md`.
-5. `## Additional Resources` (same leaf bullets as README).
+1. Frontmatter block (identical to README's).
+2. Generated banner.
+3. `# <name>`.
+4. `intro.md`.
+5. `companions.md`.
+6. `## Additional HOWTOs`: same inlined leaves as the README.
 
-**skills/&lt;leaf&gt;.md slot order:**
-
-1. Generated banner.
-2. `docs/leaves/<leaf>.md` verbatim (with llm-only markers unwrapped).
+**Inlined leaves:** each `docs/leaves/<leaf>.md` is appended under `## Additional HOWTOs` with its headings demoted by two levels (`#` → `###`, `##` → `####`). A top-level H1 is required per leaf (the structure layer flags its absence).
 
 ### Render and verify locally
 
 ```bash
-iii-skill-render <worker> --write              # produces README.md, skill.md, skills/*.md
+iii-skill-render <worker> --write              # produces README.md + skill.md (removes any stale skills/ dir)
 iii-skill-check verify <worker>                # all three layers (structure + Vale + AI)
 iii-skill-check verify <worker> --layers structure,vale   # offline; no API key needed
 iii-skill-check verify <worker> --layers ai    # AI only — fastest signal after a tweak
@@ -244,7 +241,7 @@ Marker lines must each sit on their own line. The structure layer balance-checks
 
 ### Worker `.md` partials — every form works
 
-Worker partials are never rendered to humans directly. The renderer produces `README.md` (humans) and `skill.md` / `skills/*.md` (agents) from the same source, so block and inline forms both work fully for both `llm-only` and `human-only`. Use whichever fits the payload.
+Worker partials are never rendered to humans directly. The renderer produces `README.md` (humans) and `skill.md` (agents) from the same source, so block and inline forms both work fully for both `llm-only` and `human-only`. Use whichever fits the payload.
 
 ```markdown
 ## Quickstart
@@ -402,7 +399,7 @@ Worker and docs modes share the validator binary; what differs is the unit and t
 | -------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------- |
 | Unit                       | A worker dir (one `iii.worker.yaml`)                              | One `.md` / `.mdx` doc                               |
 | Sources                    | `<worker>/docs/*.md`, `iii.worker.yaml`, `config.yaml`            | The doc itself, plus its YAML frontmatter            |
-| Rendered artifacts         | `<worker>/README.md`, `<worker>/skill.md`, `<worker>/skills/*.md` | `<source>.skill.md` sibling next to each doc         |
+| Rendered artifacts         | `<worker>/README.md`, `<worker>/skill.md` (leaves inlined) | `<source>.skill.md` sibling next to each doc         |
 | Action input scope         | `workers-glob` (default `*/iii.worker.yaml`)                      | `docs-glob` (default `**/*.md **/*.mdx`)             |
 | `.skill-check.yaml` schema | v1 (no `mode`) or v2 with `mode: worker`                          | v2 with `mode: docs` + `docs.include`/`docs.exclude` |
 

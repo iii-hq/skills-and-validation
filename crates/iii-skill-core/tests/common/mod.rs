@@ -1,8 +1,8 @@
 //! Shared test helpers.
 //!
 //! `templates/example-worker/` ships only sources (no rendered README.md /
-//! skill.md / skills/*.md). Tests that need rendered output use
-//! `RenderedTemplate::lock` to render in place and clean up afterwards.
+//! skill.md). Tests that need rendered output use `RenderedTemplate::lock`
+//! to render in place and clean up afterwards.
 //!
 //! `mod common;` is included into multiple test crates; only some of them
 //! exercise every helper. `#[allow(dead_code)]` keeps cargo's
@@ -47,10 +47,6 @@ impl RenderedTemplate {
             .expect("render_worker should succeed against templates/example-worker");
         std::fs::write(worker.join("README.md"), &outputs.readme).unwrap();
         std::fs::write(worker.join("skill.md"), &outputs.skill).unwrap();
-        std::fs::create_dir_all(worker.join("skills")).unwrap();
-        for (name, body) in &outputs.leaves {
-            std::fs::write(worker.join("skills").join(format!("{name}.md")), body).unwrap();
-        }
         RenderedTemplate {
             worker,
             _guard: guard,
@@ -66,6 +62,5 @@ impl Drop for RenderedTemplate {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(self.worker.join("README.md"));
         let _ = std::fs::remove_file(self.worker.join("skill.md"));
-        let _ = std::fs::remove_dir_all(self.worker.join("skills"));
     }
 }

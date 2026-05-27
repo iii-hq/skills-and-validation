@@ -14,8 +14,7 @@
 //! 1. [`candidates`] enumerates the source path(s) that compose a given
 //!    rendered artifact:
 //!    - Docs mode: `<src>.mdx.skill.md` → `<src>.mdx` (1:1)
-//!    - Worker leaves: `<worker>/skills/<leaf>.md` → `<worker>/docs/leaves/<leaf>.md` (1:1)
-//!    - Worker README/skill.md: composed from `<worker>/docs/{intro,quickstart,companions}.md` plus every `docs/leaves/*.md` (1:N)
+//!    - Worker README/skill.md: composed from `<worker>/docs/{intro,quickstart,companions}.md` plus every `docs/leaves/*.md` (inlined under ## Additional HOWTOs) (1:N)
 //!
 //! 2. [`translate`] reads the offending line text from the rendered file,
 //!    grep-equivalents it against each candidate source, and returns the
@@ -51,21 +50,10 @@ pub fn candidates(rendered: &Path) -> Vec<PathBuf> {
         return vec![PathBuf::from(stripped.to_string())];
     }
 
-    // Worker leaf: <worker>/skills/<leaf>.md → <worker>/docs/leaves/<leaf>.md
-    if let Some(parent) = rendered.parent() {
-        if parent.file_name().and_then(|n| n.to_str()) == Some("skills") {
-            if let Some(worker) = parent.parent() {
-                if let Some(leaf) = rendered.file_name() {
-                    return vec![worker.join("docs").join("leaves").join(leaf)];
-                }
-            }
-        }
-    }
-
     // Worker README/skill.md: composed from docs/{intro,quickstart,companions}.md
-    // plus every docs/leaves/*.md. Order matters — return partials in the
-    // same order the renderer emits them so the first match is also the
-    // most natural one.
+    // plus every docs/leaves/*.md (leaves are inlined under ## Additional
+    // HOWTOs). Order matters — return partials in the same order the renderer
+    // emits them so the first match is also the most natural one.
     //
     // Gate this on the parent dir actually being a worker (has an
     // iii.worker.yaml manifest OR a docs/intro.md partial). Without

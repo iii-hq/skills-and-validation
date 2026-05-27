@@ -8,7 +8,7 @@ fn write_worker_with_intro(dir: &Path, name: &str, intro_body: &str) {
     std::fs::write(
         dir.join("iii.worker.yaml"),
         format!(
-            "iii: v1\nname: {name}\nlanguage: rust\ndeploy: binary\nmanifest: Cargo.toml\nbin: {name}\ndescription: A small fixture worker for tests.\n"
+            "iii: v1\nname: {name}\nlanguage: rust\ndeploy: binary\nmanifest: Cargo.toml\nbin: {name}\ndescription: A small fixture worker for tests.\ntags: \"test, fixture\"\n"
         ),
     )
     .unwrap();
@@ -125,12 +125,11 @@ fn intro_human_only_block_kept_in_readme_dropped_in_skill() {
     );
 }
 
-/// A leaf whose H1 lives inside an `llm-only` block must not surface that
-/// H1 as the README `## Additional Resources` link text. The renderer
-/// falls back to the leaf name; the structure layer is the place that
-/// flags the missing H1 (covered in tests/structure.rs).
+/// A leaf's `llm-only` H1 must not leak into the README's inlined HOWTO: the
+/// title lives inside an llm-only block, so the README (human-facing) drops
+/// it entirely while skill.md (agent-facing) keeps it as a demoted `###`.
 #[test]
-fn leaf_h1_inside_llm_only_block_does_not_leak_into_readme() {
+fn leaf_h1_inside_llm_only_block_dropped_in_readme_kept_in_skill() {
     let tmp = TempDir::new().unwrap();
     write_worker_with_intro(tmp.path(), "fixture", "Intro.\n");
 
@@ -144,15 +143,21 @@ fn leaf_h1_inside_llm_only_block_does_not_leak_into_readme() {
 
     let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
 
+    // README: title gone, surrounding body still inlined under the section.
     assert!(
         !outputs.readme.contains("Hidden agent-only title"),
-        "leaf H1 inside llm-only block leaked into README link text: {}",
+        "leaf H1 inside llm-only block leaked into README: {}",
         outputs.readme
     );
-    // Fallback: link text is the bare leaf name when no H1 is available.
     assert!(
-        outputs.readme.contains("- [verb](skills/verb.md)"),
-        "expected leaf-name fallback link text in README: {}",
+        outputs.readme.contains("## Additional HOWTOs") && outputs.readme.contains("Visible body."),
+        "expected the visible leaf body inlined in README: {}",
         outputs.readme
+    );
+    // skill.md: the llm-only H1 is unwrapped and demoted to ### in the section.
+    assert!(
+        outputs.skill.contains("### Hidden agent-only title"),
+        "expected the unwrapped, demoted leaf title in skill.md: {}",
+        outputs.skill
     );
 }

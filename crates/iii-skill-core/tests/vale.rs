@@ -15,10 +15,7 @@ fn vale_passes_example_artifacts() {
 
     let readme = example.join("README.md");
     let skill = example.join("skill.md");
-    let analyze = example.join("skills").join("analyze.md");
-    let diff = example.join("skills").join("diff.md");
-    let summarize = example.join("skills").join("summarize.md");
-    let artifacts: Vec<&std::path::Path> = vec![&readme, &skill, &analyze, &diff, &summarize];
+    let artifacts: Vec<&std::path::Path> = vec![&readme, &skill];
 
     let violations =
         iii_skill_core::vale::run(&artifacts, &vale_config()).expect("vale should run");

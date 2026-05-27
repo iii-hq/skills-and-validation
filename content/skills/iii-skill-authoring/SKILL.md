@@ -1,13 +1,13 @@
 ---
 name: "iii-skill-authoring"
 title: "iii-skill-authoring"
-description: "Skill bundle index for authoring the partials iii-skill-check renders into worker README, skill, and skills/leaves."
+description: "Skill bundle index for authoring the partials iii-skill-check renders into a worker README and a single skill.md (leaves inlined as HOWTOs)."
 type: "reference"
 ---
 
 # iii-skill-authoring
 
-How to write the partials that `iii-skill-check` renders into the README, top-level skill body, and per-function skill leaves of an iii worker.
+How to write the partials that `iii-skill-check` renders into the README and the single `skill.md` of an iii worker (per-function leaves are inlined under `## Additional HOWTOs`).
 
 Read individual topics directly via `skillkit read iii-skill-authoring/<topic>`, install the bundle into a consumer repo with `npx skillkit add iii-hq/skills-and-validation/content/skills`, or surface it through the iii engine by adding the path to your deployment's `skills:` glob:
 

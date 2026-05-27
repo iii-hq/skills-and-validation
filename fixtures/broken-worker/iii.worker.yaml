@@ -5,3 +5,4 @@ deploy: binary
 manifest: Cargo.toml
 bin: broken-worker
 description: A worker shipped with intentional rule violations for testing the validator.
+tags: "test, fixture, broken"

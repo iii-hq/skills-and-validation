@@ -15,13 +15,51 @@ fn read_manifest_parses_example_worker() {
         .expect("read_manifest should succeed for example-worker");
 
     assert_eq!(manifest.name, "textstats");
-    let desc = manifest
-        .description
-        .as_ref()
-        .expect("example-worker has a description");
     assert!(
-        desc.starts_with("Text analysis on the iii bus"),
-        "unexpected description: {desc}"
+        manifest.description.starts_with("Text analysis on the iii bus"),
+        "unexpected description: {}",
+        manifest.description
+    );
+    assert!(
+        !manifest.tags.trim().is_empty(),
+        "example-worker should carry tags"
+    );
+}
+
+#[test]
+fn read_manifest_errors_on_missing_description_or_tags() {
+    let tmp = tempfile::tempdir().unwrap();
+    // name + tags present, description missing.
+    std::fs::write(
+        tmp.path().join("iii.worker.yaml"),
+        "iii: v1\nname: foo\ntags: \"a, b\"\n",
+    )
+    .unwrap();
+    assert!(
+        iii_skill_core::introspect::read_manifest(tmp.path()).is_err(),
+        "expected an error when description is missing"
+    );
+
+    // name + description present, tags missing.
+    std::fs::write(
+        tmp.path().join("iii.worker.yaml"),
+        "iii: v1\nname: foo\ndescription: A worker.\n",
+    )
+    .unwrap();
+    assert!(
+        iii_skill_core::introspect::read_manifest(tmp.path()).is_err(),
+        "expected an error when tags is missing"
+    );
+
+    // tags present but empty.
+    std::fs::write(
+        tmp.path().join("iii.worker.yaml"),
+        "iii: v1\nname: foo\ndescription: A worker.\ntags: \"  \"\n",
+    )
+    .unwrap();
+    assert!(
+        iii_skill_core::introspect::read_manifest(tmp.path()).is_err(),
+        "expected an error when tags is empty"
     );
 }
 

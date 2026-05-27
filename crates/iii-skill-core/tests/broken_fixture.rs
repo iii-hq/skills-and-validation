@@ -30,20 +30,11 @@ fn render_broken_matches_golden() {
 
     let expected_skill = std::fs::read_to_string(dir.join("skill.md")).unwrap();
     similar_asserts::assert_eq!(expected_skill, outputs.skill);
-
-    let expected_leaf =
-        std::fs::read_to_string(dir.join("skills").join("example.md")).unwrap();
-    let actual_leaf = outputs
-        .leaves
-        .get("example")
-        .expect("missing leaf 'example' in render output");
-    similar_asserts::assert_eq!(expected_leaf, *actual_leaf);
 }
 
 /// The broken fixture deliberately seeds three forbidden patterns
-/// (cargo build, <bin> --help, <bin> --manifest | jq) in quickstart and
-/// one broken iii:// link in intro. Structure layer should catch all of
-/// them, in both README and skill.md.
+/// (cargo build, <bin> --help, <bin> --manifest | jq) in quickstart and a
+/// leaf with no top-level H1. Structure layer should catch all of them.
 #[test]
 fn structure_broken_fails_with_multiple_violations() {
     let v = iii_skill_core::structure::check(&broken_dir())
@@ -63,8 +54,8 @@ fn structure_broken_fails_with_multiple_violations() {
         "expected `--manifest | jq` flag, got: {messages:?}"
     );
     assert!(
-        messages.iter().any(|m| m.contains("nonexistent")),
-        "expected broken iii:// link flag, got: {messages:?}"
+        messages.iter().any(|m| m.contains("h1")),
+        "expected a missing-H1 flag for the leaf, got: {messages:?}"
     );
     assert!(
         v.len() >= 4,
@@ -74,15 +65,14 @@ fn structure_broken_fails_with_multiple_violations() {
 }
 
 /// The broken fixture's intro and leaf use forbidden marketing phrasing
-/// ("blazing fast", "revolutionary"). Vale should flag them in every
-/// rendered surface they leak into (README, skill.md, skills/<leaf>.md).
+/// ("blazing fast", "revolutionary"). Vale should flag them in the rendered
+/// README + skill.md (the leaf content is inlined into both now).
 #[test]
 fn vale_broken_fails_with_multiple_violations() {
     let dir = broken_dir();
     let readme = dir.join("README.md");
     let skill = dir.join("skill.md");
-    let leaf = dir.join("skills").join("example.md");
-    let artifacts: Vec<&Path> = vec![&readme, &skill, &leaf];
+    let artifacts: Vec<&Path> = vec![&readme, &skill];
 
     let v = iii_skill_core::vale::run(&artifacts, &vale_config())
         .expect("vale should run against the broken fixture");

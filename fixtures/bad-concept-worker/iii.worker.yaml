@@ -5,3 +5,4 @@ deploy: binary
 manifest: Cargo.toml
 bin: bad-concept-worker
 description: Targeted AI-layer fixture for worker concept drift.
+tags: "test, fixture, concept-drift"

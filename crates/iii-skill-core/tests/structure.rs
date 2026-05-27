@@ -10,7 +10,7 @@ fn write_minimal_worker(dir: &Path, name: &str) {
     std::fs::write(
         dir.join("iii.worker.yaml"),
         format!(
-            "iii: v1\nname: {name}\nlanguage: rust\ndeploy: binary\nmanifest: Cargo.toml\nbin: {name}\ndescription: A small fixture worker for tests.\n"
+            "iii: v1\nname: {name}\nlanguage: rust\ndeploy: binary\nmanifest: Cargo.toml\nbin: {name}\ndescription: A small fixture worker for tests.\ntags: \"test, fixture\"\n"
         ),
     )
     .unwrap();
@@ -30,10 +30,6 @@ fn write_minimal_worker(dir: &Path, name: &str) {
     let outputs = iii_skill_core::render::render_worker(dir).unwrap();
     std::fs::write(dir.join("README.md"), &outputs.readme).unwrap();
     std::fs::write(dir.join("skill.md"), &outputs.skill).unwrap();
-    std::fs::create_dir_all(dir.join("skills")).unwrap();
-    for (leaf, body) in &outputs.leaves {
-        std::fs::write(dir.join("skills").join(format!("{leaf}.md")), body).unwrap();
-    }
 }
 
 #[test]
@@ -180,9 +176,9 @@ fn flags_leaf_with_no_h1() {
     let tmp = TempDir::new().unwrap();
     write_minimal_worker(tmp.path(), "fixture");
 
-    // Author a leaf source whose body has no `# ` heading, then render it
-    // and write the artifact to disk. The structure layer reads the
-    // rendered file, so this exercises the real path.
+    // A source leaf with no top-level H1. The structure layer reads source
+    // leaves directly (docs/leaves/*.md), since they're inlined into the
+    // artifacts rather than rendered to a skills/ dir.
     let leaves_src = tmp.path().join("docs").join("leaves");
     std::fs::create_dir_all(&leaves_src).unwrap();
     std::fs::write(
@@ -190,18 +186,13 @@ fn flags_leaf_with_no_h1() {
         "## When to use\n\n- A bullet, but no top-level H1.\n",
     )
     .unwrap();
-    let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
-    std::fs::write(tmp.path().join("README.md"), &outputs.readme).unwrap();
-    std::fs::write(tmp.path().join("skill.md"), &outputs.skill).unwrap();
-    for (leaf, body) in &outputs.leaves {
-        std::fs::write(tmp.path().join("skills").join(format!("{leaf}.md")), body).unwrap();
-    }
 
     let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
-        violations.iter().any(|v| v.file == "skills/verb.md"
-            && v.message.to_lowercase().contains("h1")),
-        "expected a missing-H1 violation on skills/verb.md, got: {violations:?}"
+        violations
+            .iter()
+            .any(|v| v.file == "docs/leaves/verb.md" && v.message.to_lowercase().contains("h1")),
+        "expected a missing-H1 violation on docs/leaves/verb.md, got: {violations:?}"
     );
 }
 
@@ -210,58 +201,41 @@ fn flags_leaf_whose_only_h1_lives_inside_llm_only_block() {
     let tmp = TempDir::new().unwrap();
     write_minimal_worker(tmp.path(), "fixture");
 
+    // The H1 lives only inside an llm-only block. check_leaf_h1 strips both
+    // visibility-block types before scanning, so this counts as no H1 — the
+    // README inlining would drop the title entirely, leaving the HOWTO
+    // untitled. The structure check must flag it.
     let leaves_src = tmp.path().join("docs").join("leaves");
     std::fs::create_dir_all(&leaves_src).unwrap();
     std::fs::write(
         leaves_src.join("verb.md"),
-        // The H1 lives inside an llm-only block. The renderer unwraps the
-        // block for the skill artifact, so a naive H1 check on the
-        // rendered skill body would see the heading — but it would still
-        // leak into the README link text if extract_h1 ran against the
-        // raw partial. The structure check should flag this leaf.
         "<!-- llm-only:start -->\n# Hidden agent-only title\n<!-- llm-only:end -->\n\n## When to use\n\n- bullet\n",
     )
     .unwrap();
-    let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
-    std::fs::write(tmp.path().join("README.md"), &outputs.readme).unwrap();
-    std::fs::write(tmp.path().join("skill.md"), &outputs.skill).unwrap();
-    for (leaf, body) in &outputs.leaves {
-        std::fs::write(tmp.path().join("skills").join(format!("{leaf}.md")), body).unwrap();
-    }
 
-    // The rendered leaf still carries the unwrapped H1 (LLM-facing), so the
-    // current naive check passes that leaf. This documents the gap: the
-    // worker-mode structure check reads the rendered artifact and is
-    // strict about a top-level H1 existing there.
-    //
-    // What we *do* want to assert is that the README link text fell back
-    // to the leaf name (extract_h1 ran on a stripped body), not the
-    // hidden title. That assertion lives in
-    // render_visibility_blocks.rs::leaf_h1_inside_llm_only_block_does_not_leak_into_readme.
     let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
-    // No leaf-h1 violation expected here because the rendered leaf body
-    // *does* contain an H1 (the unwrapped block). This test pins that
-    // contract so a future change that tightens the H1 check to run on
-    // the stripped-for-title body has to update this test deliberately.
     assert!(
-        !violations
+        violations
             .iter()
-            .any(|v| v.file == "skills/verb.md" && v.message.to_lowercase().contains("h1")),
-        "structure check should not fire on the rendered leaf, since the unwrap restored the H1; got: {violations:?}"
+            .any(|v| v.file == "docs/leaves/verb.md" && v.message.to_lowercase().contains("h1")),
+        "expected a missing-H1 violation (H1 only inside an llm-only block), got: {violations:?}"
     );
 }
 
 #[test]
-fn flags_iii_link_to_unknown_leaf() {
+fn flags_missing_frontmatter_in_skill() {
     let tmp = TempDir::new().unwrap();
     write_minimal_worker(tmp.path(), "fixture");
-    let mut skill = std::fs::read_to_string(tmp.path().join("skill.md")).unwrap();
-    skill.push_str("\n- [bogus](iii://fixture/nonexistent) — broken link\n");
-    std::fs::write(tmp.path().join("skill.md"), skill).unwrap();
+    // Strip the frontmatter from the rendered skill.md.
+    let skill = std::fs::read_to_string(tmp.path().join("skill.md")).unwrap();
+    let body = skill.splitn(2, "\n---\n").nth(1).unwrap_or(&skill);
+    std::fs::write(tmp.path().join("skill.md"), format!("# fixture\n\n{body}")).unwrap();
 
     let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
     assert!(
-        violations.iter().any(|v| v.message.contains("nonexistent")),
-        "expected a broken-link violation, got: {violations:?}"
+        violations
+            .iter()
+            .any(|v| v.file == "skill.md" && v.message.to_lowercase().contains("frontmatter")),
+        "expected a missing-frontmatter violation on skill.md, got: {violations:?}"
     );
 }

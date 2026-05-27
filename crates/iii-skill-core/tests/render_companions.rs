@@ -6,7 +6,7 @@ fn write_minimal_worker_with_companions(dir: &Path, name: &str, companions: Opti
     std::fs::write(
         dir.join("iii.worker.yaml"),
         format!(
-            "iii: v1\nname: {name}\nlanguage: rust\ndeploy: binary\nmanifest: Cargo.toml\nbin: {name}\ndescription: A small fixture worker for tests.\n"
+            "iii: v1\nname: {name}\nlanguage: rust\ndeploy: binary\nmanifest: Cargo.toml\nbin: {name}\ndescription: A small fixture worker for tests.\ntags: \"test, fixture\"\n"
         ),
     )
     .unwrap();

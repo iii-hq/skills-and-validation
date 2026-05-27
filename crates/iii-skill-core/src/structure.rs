@@ -1,5 +1,4 @@
 use anyhow::Context;
-use std::collections::HashSet;
 use std::path::Path;
 
 /// Severity of a single violation. `Error` fails the run; `Warning` is
@@ -63,47 +62,86 @@ impl Violation {
 
 /// Run Layer 1 deterministic structure checks against a worker dir.
 ///
-/// Reads `<dir>/iii.worker.yaml`, `<dir>/README.md`, `<dir>/skill.md`, and any
-/// `<dir>/skills/*.md` files. Returns one Violation per finding; empty Vec means
-/// the artifacts are clean at this layer.
+/// Reads `<dir>/iii.worker.yaml`, `<dir>/README.md`, `<dir>/skill.md`, and the
+/// source leaves under `<dir>/docs/leaves/*.md` (now inlined into the two
+/// artifacts rather than rendered to a `skills/` dir). Returns one Violation
+/// per finding; empty Vec means the artifacts are clean at this layer.
 pub fn check(dir: &Path) -> anyhow::Result<Vec<Violation>> {
     let manifest = crate::introspect::read_manifest(dir)?;
     let name = &manifest.name;
 
     let readme_path = dir.join("README.md");
     let skill_path = dir.join("skill.md");
-    let skills_dir = dir.join("skills");
 
     let readme = std::fs::read_to_string(&readme_path)
         .with_context(|| format!("reading {}", readme_path.display()))?;
     let skill = std::fs::read_to_string(&skill_path)
         .with_context(|| format!("reading {}", skill_path.display()))?;
-    let leaves = list_existing_leaves(&skills_dir)?;
+    let leaves = list_source_leaves(&dir.join("docs").join("leaves"))?;
 
     let mut violations = Vec::new();
     violations.extend(check_required_sections(&readme));
     violations.extend(check_install_line(&readme, name));
     violations.extend(check_forbidden_install_patterns(&readme, name));
 
-    let known_leaves: HashSet<String> = leaves.iter().map(|(n, _)| n.clone()).collect();
-
-    let mut artifacts: Vec<(String, &str)> =
-        vec![("README.md".to_string(), readme.as_str()), ("skill.md".to_string(), skill.as_str())];
-    for (leaf, body) in &leaves {
-        artifacts.push((format!("skills/{leaf}.md"), body.as_str()));
-    }
-
-    for (label, content) in &artifacts {
+    // Rendered artifacts: frontmatter present + visibility markers balanced.
+    // (The renderer consumes markers, so a net imbalance here signals a
+    // hand-edit of the generated file.)
+    for (label, content) in [("README.md", readme.as_str()), ("skill.md", skill.as_str())] {
+        violations.extend(check_frontmatter(label, content));
         violations.extend(check_llm_only_balance(label, content));
         violations.extend(check_human_only_balance(label, content));
-        violations.extend(check_iii_links(label, content, name, &known_leaves));
     }
 
+    // Source leaves: each must carry a top-level H1 (it becomes the `### Title`
+    // when inlined under `## Additional HOWTOs`) and have balanced visibility
+    // markers (an unclosed block would silently truncate the inlined output).
     for (leaf, body) in &leaves {
+        let label = format!("docs/leaves/{leaf}.md");
+        violations.extend(check_llm_only_balance(&label, body));
+        violations.extend(check_human_only_balance(&label, body));
         violations.extend(check_leaf_h1(leaf, body));
     }
 
     Ok(violations)
+}
+
+/// `README.md` and `skill.md` must open with a YAML frontmatter block
+/// carrying `name`, `description`, and `tags`. The renderer always emits it;
+/// this catches a hand-edit that drops or mangles it.
+fn check_frontmatter(label: &str, content: &str) -> Vec<Violation> {
+    if !content.starts_with("---\n") {
+        return vec![Violation::error(
+            label,
+            Some(1),
+            "missing leading YAML frontmatter (`--- name/description/tags ---`)",
+        )];
+    }
+    let after = &content[4..];
+    let block = match after.find("\n---") {
+        Some(end) => &after[..end],
+        None => {
+            return vec![Violation::error(
+                label,
+                Some(1),
+                "frontmatter block is not closed with `---`",
+            )]
+        }
+    };
+    let mut violations = Vec::new();
+    for key in ["name", "description", "tags"] {
+        let present = block
+            .lines()
+            .any(|l| l.trim_start().starts_with(&format!("{key}:")));
+        if !present {
+            violations.push(Violation::error(
+                label,
+                None,
+                format!("frontmatter missing `{key}:` (sourced from iii.worker.yaml)"),
+            ));
+        }
+    }
+    violations
 }
 
 fn check_required_sections(readme: &str) -> Vec<Violation> {
@@ -215,68 +253,33 @@ fn check_human_only_balance(label: &str, content: &str) -> Vec<Violation> {
     )]
 }
 
-/// Each rendered `skills/<leaf>.md` must carry a top-level H1. The renderer
-/// uses that heading as link text in the README and skill.md
-/// `## Additional Resources` sections; if it's missing, the link falls back
-/// to the bare leaf name (e.g. `analyze`), which reads as an internal id
-/// rather than a topical phrase. The check runs on the rendered file (the
-/// generated banner is skipped), so a heading hidden inside an `llm-only`
-/// or `human-only` block won't count — those have already been stripped
-/// for the leaf artifact. Worker mode only; docs mode has its own H1
-/// expectations elsewhere.
+/// Each source leaf (`docs/leaves/<leaf>.md`) must carry a top-level H1: it
+/// becomes the `### Title` when the leaf is inlined under `## Additional
+/// HOWTOs`. The body is stripped of both visibility-block types first, so an
+/// H1 that lives only inside an `llm-only` / `human-only` block doesn't count
+/// (it wouldn't survive to the inlined output for at least one audience).
+/// Worker mode only; docs mode has its own H1 expectations elsewhere.
 fn check_leaf_h1(leaf: &str, body: &str) -> Vec<Violation> {
-    for line in body.lines() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("# ") {
+    let visible = crate::human_only::strip_human_only(&crate::llm_only::strip_llm_only(body));
+    for line in visible.lines() {
+        if line.trim_start().starts_with("# ") {
             return Vec::new();
         }
     }
     vec![Violation::error(
-        format!("skills/{leaf}.md"),
+        format!("docs/leaves/{leaf}.md"),
         None,
-        "missing top-level H1 (the renderer uses the H1 as link text in `## Additional Resources`; add a topical phrase, e.g. `# Sizing text before provider calls`)",
+        "missing top-level H1 (it becomes the `### Title` when inlined under `## Additional HOWTOs`; add a topical phrase, e.g. `# Sizing text before provider calls`)",
     )]
 }
 
-fn check_iii_links(
-    label: &str,
-    content: &str,
-    worker_name: &str,
-    known_leaves: &HashSet<String>,
-) -> Vec<Violation> {
-    let mut violations = Vec::new();
-    let prefix = format!("iii://{worker_name}/");
-    for (i, line) in content.lines().enumerate() {
-        let mut start = 0;
-        while let Some(rel) = line[start..].find(&prefix) {
-            let abs = start + rel;
-            let after = &line[abs + prefix.len()..];
-            let leaf: String = after
-                .chars()
-                .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == '/')
-                .collect();
-            if !leaf.is_empty() && !known_leaves.contains(&leaf) {
-                violations.push(Violation::error(
-                    label,
-                    Some(i + 1),
-                    format!(
-                        "iii://{worker_name}/{leaf} points to a leaf that is not registered (no skills/{leaf}.md)"
-                    ),
-                ));
-            }
-            start = abs + prefix.len();
-        }
-    }
-    violations
-}
-
-fn list_existing_leaves(skills_dir: &Path) -> anyhow::Result<Vec<(String, String)>> {
+fn list_source_leaves(leaves_dir: &Path) -> anyhow::Result<Vec<(String, String)>> {
     let mut leaves: Vec<(String, String)> = Vec::new();
-    if !skills_dir.exists() {
+    if !leaves_dir.exists() {
         return Ok(leaves);
     }
-    for entry in std::fs::read_dir(skills_dir)
-        .with_context(|| format!("reading {}", skills_dir.display()))?
+    for entry in std::fs::read_dir(leaves_dir)
+        .with_context(|| format!("reading {}", leaves_dir.display()))?
     {
         let entry = entry?;
         let path = entry.path();
@@ -286,7 +289,7 @@ fn list_existing_leaves(skills_dir: &Path) -> anyhow::Result<Vec<(String, String
         let name = path
             .file_stem()
             .and_then(|s| s.to_str())
-            .ok_or_else(|| anyhow::anyhow!("invalid skill filename: {}", path.display()))?
+            .ok_or_else(|| anyhow::anyhow!("invalid leaf filename: {}", path.display()))?
             .to_string();
         let body = std::fs::read_to_string(&path)
             .with_context(|| format!("reading {}", path.display()))?;

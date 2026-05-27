@@ -14,7 +14,7 @@ type: "how-to"
 iii-skill-render <worker> --write
 ```
 
-Reads `iii.worker.yaml.name`, `<worker>/config.yaml`, and the partials under `<worker>/docs/`. Writes `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`.
+Reads `iii.worker.yaml` (name, description, tags), `<worker>/config.yaml`, and the partials under `<worker>/docs/`. Writes `<worker>/README.md` and `<worker>/skill.md` (leaves inlined under `## Additional HOWTOs`; no `skills/` dir).
 
 Drop the `--write` flag to render to memory only, useful for previewing the rendered output without touching the on-disk artifacts.
 
@@ -26,7 +26,7 @@ iii-skill-check verify <worker>
 
 Runs three layers in order, accumulating violations:
 
-1. **Structure**: section presence and order in README, install command parity with `iii.worker.yaml.name`, no source-build blocks, llm-only marker balance, every `iii://<name>/<leaf>` link resolves.
+1. **Structure**: section presence and order in README, install command parity with `iii.worker.yaml.name`, no source-build blocks, frontmatter present in README/skill.md, llm-only / human-only marker balance, every source leaf carries a top-level H1.
 2. **Vale**: every rendered artifact lints clean against `styles/Diataxis` (HowTo subset) and `styles/Terminology` (slop, forbidden terms).
 3. **AI**: one Claude API call per artifact with the project rules concatenated as context. Requires `ANTHROPIC_API_KEY`.
 
@@ -38,7 +38,7 @@ Subset the layers with `--layers structure,vale` to skip the AI call locally.
 iii-skill-check verify-rendered <worker>
 ```
 
-Re-renders the worker in memory and diffs against the on-disk `README.md`, `skill.md`, and `skills/*.md`. Non-zero exit means an artifact drifted from the partials. Re-run `iii-skill-render <worker> --write` to fix.
+Re-renders the worker in memory and diffs against the on-disk `README.md` and `skill.md` (and flags a leftover `skills/` dir as stale). Non-zero exit means an artifact drifted from the partials. Re-run `iii-skill-render <worker> --write` to fix.
 
 ## Reading violations
 

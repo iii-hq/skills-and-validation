@@ -9,7 +9,7 @@ type: "how-to"
 The inverse of `llm-only`. A `human-only:start` / `human-only:end` block lets one source file produce two render targets:
 
 - **README.md target**: the `<!--`/`-->` markers are invisible per CommonMark, but the prose between them renders normally. A human reader on GitHub or iii.dev sees the block as plain text.
-- **skill.md / skills/*.md target**: the renderer drops the entire block, both marker lines and the inner body. The agent reading the skill never sees the prose.
+- **skill.md target**: the renderer drops the entire block, both marker lines and the inner body. The agent reading the skill (including leaves inlined under `## Additional HOWTOs`) never sees the prose.
 
 Two shapes, mirroring `llm-only`:
 
@@ -47,7 +47,7 @@ The two block types compose: a `human-only` block inside an `llm-only` block (or
 
 ## Inline form
 
-`<!-- human-only: short note -->` on its own line expands to its payload in the rendered README and is dropped entirely from `skill.md` / `skills/*.md`. Worker mode runs the README through `unwrap_human_only`, so the payload becomes visible prose; the skill render path drops the line.
+`<!-- human-only: short note -->` on its own line expands to its payload in the rendered README and is dropped entirely from `skill.md`. Worker mode runs the README through `unwrap_human_only`, so the payload becomes visible prose; the skill render path drops the line.
 
 The inline form must sit on a line of its own. Embedded mid-paragraph human-only comments are not parsed.
 

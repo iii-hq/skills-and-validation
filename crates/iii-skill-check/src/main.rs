@@ -377,14 +377,13 @@ fn verify_worker(
         }
     };
 
-    // Mirror the worker layout inside a temp dir so vale's `[**/README.md]`,
-    // `[**/skill.md]`, and `[**/skills/*.md]` globs in content/.vale.ini
-    // still match.
+    // Mirror the worker layout inside a temp dir so vale's `[**/README.md]`
+    // and `[**/skill.md]` globs in content/.vale.ini still match. Leaves are
+    // inlined into both artifacts now, so there is no skills/ dir to stage.
     let stage = tempfile::TempDir::new()
         .context("creating temp dir for staged worker artifacts")?;
     let stage_root = stage.path().join("worker");
-    let stage_skills = stage_root.join("skills");
-    std::fs::create_dir_all(&stage_skills)?;
+    std::fs::create_dir_all(&stage_root)?;
 
     let mut staged: Vec<StagedArtifact> = Vec::new();
 
@@ -403,16 +402,6 @@ fn verify_worker(
         temp: skill_tmp,
         body: rendered.skill.clone(),
     });
-
-    for (leaf, body) in &rendered.leaves {
-        let leaf_tmp = stage_skills.join(format!("{leaf}.md"));
-        std::fs::write(&leaf_tmp, body)?;
-        staged.push(StagedArtifact {
-            canonical: worker.join("skills").join(format!("{leaf}.md")),
-            temp: leaf_tmp,
-            body: body.clone(),
-        });
-    }
 
     if layer_set.contains("vale") {
         let vale_config = resolve_vale_config(workers_root, vale_override.as_deref())?;

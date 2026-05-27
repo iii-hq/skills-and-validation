@@ -207,10 +207,13 @@ else
     exit 1
   fi
 
-  # Each broken-worker artifact must be flagged independently.
-  for art in README.md skill.md skills/example.md; do
-    if ! grep -q "fixtures/broken-worker/$art" "$ai_log"; then
-      echo "ERROR: AI layer didn't flag fixtures/broken-worker/$art" >&2
+  # Each seeded source file must be flagged independently. AI violations
+  # are source-mapped back to the editable partials (the leaf content is
+  # inlined into README.md / skill.md, so its violations map to
+  # docs/leaves/example.md), so we assert on the source paths.
+  for src in docs/intro.md docs/quickstart.md docs/leaves/example.md; do
+    if ! grep -q "fixtures/broken-worker/$src" "$ai_log"; then
+      echo "ERROR: AI layer didn't flag fixtures/broken-worker/$src" >&2
       rm -f "$ai_log"
       exit 1
     fi
@@ -225,7 +228,7 @@ else
     exit 1
   fi
   rm -f "$ai_log"
-  echo "  (3/3 broken-worker artifacts flagged; voice violation cited)"
+  echo "  (3/3 broken-worker source files flagged; voice violation cited)"
 fi
 
 # ----------------------------------------------------------------------

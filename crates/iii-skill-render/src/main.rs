@@ -104,25 +104,20 @@ fn find_skill_check_yaml(start: &Path) -> Option<PathBuf> {
 fn render_worker_dir(worker: &Path, write: bool) -> Result<()> {
     let out = iii_skill_core::render::render_worker(worker)?;
     println!(
-        "rendered {} (readme {} bytes, skill {} bytes, {} leaves)",
+        "rendered {} (readme {} bytes, skill {} bytes)",
         worker.display(),
         out.readme.len(),
         out.skill.len(),
-        out.leaves.len(),
     );
     if write {
         std::fs::write(worker.join("README.md"), &out.readme)?;
         std::fs::write(worker.join("skill.md"), &out.skill)?;
-        std::fs::create_dir_all(worker.join("skills"))?;
-        for (leaf, body) in &out.leaves {
-            std::fs::write(worker.join("skills").join(format!("{leaf}.md")), body)?;
-        }
-        for disk_leaf in iii_skill_core::render::list_rendered_leaves(worker) {
-            if !out.leaves.contains_key(&disk_leaf) {
-                let path = worker.join("skills").join(format!("{disk_leaf}.md"));
-                std::fs::remove_file(&path)?;
-                println!("removed stale {}", path.display());
-            }
+        // Leaves are now inlined into skill.md / README.md. Remove any
+        // leftover skills/ directory from the pre-inlining layout.
+        let skills = worker.join("skills");
+        if skills.is_dir() {
+            std::fs::remove_dir_all(&skills)?;
+            println!("removed stale {}", skills.display());
         }
         println!("wrote artifacts to {}", worker.display());
     }

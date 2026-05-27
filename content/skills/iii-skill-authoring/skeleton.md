@@ -36,8 +36,11 @@ language: rust
 deploy: binary
 manifest: Cargo.toml
 bin: <worker>
-description: One-sentence description that ends up in the skills index.
+description: One-sentence description that ends up in the README/skill.md frontmatter and the search index.
+tags: "comma, separated, search, tags"
 ```
+
+`name`, `description`, and `tags` are all required: the renderer emits them as the searchable frontmatter block at the top of both `README.md` and `skill.md`, and render fails if any is missing or empty.
 
 ## `config.yaml`
 
@@ -147,7 +150,7 @@ iii-skill-render <worker> --write
 iii-skill-check verify <worker> --layers structure,vale
 ```
 
-The first command produces `<worker>/README.md`, `<worker>/skill.md`, and `<worker>/skills/*.md`. The second exercises the structure and Vale layers locally. The AI layer requires `ANTHROPIC_API_KEY`; CI runs it on every PR.
+The first command produces `<worker>/README.md` and `<worker>/skill.md` (leaves inlined under `## Additional HOWTOs`; no `skills/` dir). The second exercises the structure and Vale layers locally. The AI layer requires `ANTHROPIC_API_KEY`; CI runs it on every PR.
 
 ## Worked example
 

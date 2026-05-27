@@ -5,3 +5,4 @@ deploy: binary
 manifest: Cargo.toml
 bin: bad-sdk-worker
 description: Targeted AI-layer fixture for SDK convention drift.
+tags: "test, fixture, sdk-drift"

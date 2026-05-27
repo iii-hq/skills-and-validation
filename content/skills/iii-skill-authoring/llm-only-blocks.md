@@ -8,8 +8,8 @@ type: "how-to"
 
 An `llm-only:start` / `llm-only:end` block lets one source file produce two render targets:
 
-- **README.md target**: the markers stay as literal comments. Mintlify, GitHub, and most other markdown renderers omit HTML comments from the published page, so a human reader on iii.dev never sees the content.
-- **skill.md / skills/*.md target**: the renderer strips the marker lines, leaving the inner body as plain prose. The agent reading the skill body sees the content.
+- **README.md target**: the renderer drops the block entirely (markers and body), so a human reader on iii.dev never sees the content.
+- **skill.md target**: the renderer strips the marker lines, leaving the inner body as plain prose. The agent reading the skill body (including leaves inlined under `## Additional HOWTOs`) sees the content.
 
 Two equivalent comment forms are accepted:
 
