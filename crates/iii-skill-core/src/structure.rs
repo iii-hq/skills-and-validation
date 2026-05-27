@@ -83,6 +83,7 @@ pub fn check(dir: &Path) -> anyhow::Result<Vec<Violation>> {
     violations.extend(check_required_sections(&readme));
     violations.extend(check_install_line(&readme, name));
     violations.extend(check_forbidden_install_patterns(&readme, name));
+    violations.extend(check_manifest_metadata(&manifest));
 
     // Rendered artifacts: frontmatter present + visibility markers balanced.
     // (The renderer consumes markers, so a net imbalance here signals a
@@ -107,14 +108,16 @@ pub fn check(dir: &Path) -> anyhow::Result<Vec<Violation>> {
 }
 
 /// `README.md` and `skill.md` must open with a YAML frontmatter block
-/// carrying `name`, `description`, and `tags`. The renderer always emits it;
-/// this catches a hand-edit that drops or mangles it.
+/// carrying at least `name`. The renderer always emits it; this catches a
+/// hand-edit that drops or mangles it. `description` / `tags` are optional
+/// (warned at the manifest level when absent), so their absence from the
+/// block is not an error here.
 fn check_frontmatter(label: &str, content: &str) -> Vec<Violation> {
     if !content.starts_with("---\n") {
         return vec![Violation::error(
             label,
             Some(1),
-            "missing leading YAML frontmatter (`--- name/description/tags ---`)",
+            "missing leading YAML frontmatter (`--- name: … ---`)",
         )];
     }
     let after = &content[4..];
@@ -128,18 +131,35 @@ fn check_frontmatter(label: &str, content: &str) -> Vec<Violation> {
             )]
         }
     };
+    if !block.lines().any(|l| l.trim_start().starts_with("name:")) {
+        return vec![Violation::error(
+            label,
+            None,
+            "frontmatter missing `name:` (sourced from iii.worker.yaml)",
+        )];
+    }
+    Vec::new()
+}
+
+/// Warn (don't fail) when the searchable metadata is absent from
+/// `iii.worker.yaml`. `description` and `tags` power registry search; the
+/// renderer omits them from the frontmatter when missing, and authors get a
+/// nudge to add them without the build going red.
+fn check_manifest_metadata(manifest: &crate::introspect::WorkerManifest) -> Vec<Violation> {
     let mut violations = Vec::new();
-    for key in ["name", "description", "tags"] {
-        let present = block
-            .lines()
-            .any(|l| l.trim_start().starts_with(&format!("{key}:")));
-        if !present {
-            violations.push(Violation::error(
-                label,
-                None,
-                format!("frontmatter missing `{key}:` (sourced from iii.worker.yaml)"),
-            ));
-        }
+    if manifest.description().is_none() {
+        violations.push(Violation::warning(
+            "iii.worker.yaml",
+            None,
+            "missing `description:` (omitted from the README/skill.md frontmatter; add it so the worker is searchable)",
+        ));
+    }
+    if manifest.tags().is_none() {
+        violations.push(Violation::warning(
+            "iii.worker.yaml",
+            None,
+            "missing `tags:` (omitted from the README/skill.md frontmatter; add comma-separated tags so the worker is searchable)",
+        ));
     }
     violations
 }

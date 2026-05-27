@@ -50,7 +50,7 @@ pub fn render_worker(dir: &Path) -> anyhow::Result<RenderOutput> {
         leaves.push((leaf_name, read_partial(&leaf_path)?));
     }
 
-    let frontmatter = frontmatter_block(&manifest.name, &manifest.description, &manifest.tags);
+    let frontmatter = frontmatter_block(&manifest.name, manifest.description(), manifest.tags());
 
     let readme = render_readme(
         &frontmatter,
@@ -68,14 +68,18 @@ pub fn render_worker(dir: &Path) -> anyhow::Result<RenderOutput> {
 }
 
 /// Build the leading YAML frontmatter block. Identical in README.md and
-/// skill.md (audience-neutral: no llm-only / human-only content). Serialized
-/// via serde_yaml so values are quoted/escaped correctly.
-fn frontmatter_block(name: &str, description: &str, tags: &str) -> String {
+/// skill.md (audience-neutral: no llm-only / human-only content). `name` is
+/// always present; `description` and `tags` are omitted when absent (the
+/// structure layer warns about missing metadata). Serialized via serde_yaml
+/// so values are quoted/escaped correctly.
+fn frontmatter_block(name: &str, description: Option<&str>, tags: Option<&str>) -> String {
     #[derive(serde::Serialize)]
     struct Frontmatter<'a> {
         name: &'a str,
-        description: &'a str,
-        tags: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        description: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tags: Option<&'a str>,
     }
     let yaml = serde_yaml::to_string(&Frontmatter {
         name,
@@ -306,11 +310,23 @@ mod tests {
 
     #[test]
     fn frontmatter_block_carries_all_three_fields() {
-        let fm = frontmatter_block("textstats", "Text analysis worker.", "text, nlp");
+        let fm = frontmatter_block("textstats", Some("Text analysis worker."), Some("text, nlp"));
         assert!(fm.starts_with("---\n"));
         assert!(fm.ends_with("---"));
         assert!(fm.contains("name: textstats"));
         assert!(fm.contains("description: Text analysis worker."));
         assert!(fm.contains("tags: text, nlp"));
+    }
+
+    #[test]
+    fn frontmatter_block_omits_absent_fields() {
+        let fm = frontmatter_block("textstats", None, None);
+        assert!(fm.contains("name: textstats"));
+        assert!(!fm.contains("description:"), "absent description should be omitted: {fm}");
+        assert!(!fm.contains("tags:"), "absent tags should be omitted: {fm}");
+
+        let only_tags = frontmatter_block("textstats", None, Some("text"));
+        assert!(!only_tags.contains("description:"));
+        assert!(only_tags.contains("tags: text"));
     }
 }

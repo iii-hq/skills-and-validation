@@ -12,7 +12,7 @@ A worker that uses `iii-skill-check` keeps narrative source under `docs/`. The r
 
 ```
 <worker>/
-├── iii.worker.yaml          # worker manifest: name + description + tags feed the frontmatter (all required); plus the deploy stanza
+├── iii.worker.yaml          # worker manifest: name (required) + description + tags (recommended) feed the frontmatter; plus the deploy stanza
 ├── config.yaml              # worker runtime config, rendered verbatim under ## Configuration. Distinct from the engine's config.yaml (located wherever the engine project is).
 ├── docs/
 │   ├── intro.md             # paragraph(s) shown after the H1 in README and skill.md
@@ -35,7 +35,7 @@ There is no `skills/` directory: each leaf's content is inlined into both artifa
 
 ## Searchable frontmatter
 
-Both `README.md` and `skill.md` open with an identical YAML frontmatter block, sourced entirely from `iii.worker.yaml` (all three fields required):
+Both `README.md` and `skill.md` open with an identical YAML frontmatter block, sourced entirely from `iii.worker.yaml`. `name` is always present; `description` and `tags` are emitted when set and omitted when absent (a missing one is a structure-layer warning, not an error):
 
 ```yaml
 ---

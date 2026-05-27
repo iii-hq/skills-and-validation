@@ -146,7 +146,7 @@ The same files are on disk under `~/.local/share/skill-check/current/content/ski
 
 ```
 <worker>/
-├── iii.worker.yaml          # name + description + tags feed the searchable frontmatter (all required); plus build characteristics
+├── iii.worker.yaml          # name (required) + description + tags (recommended) feed the searchable frontmatter; plus build characteristics
 ├── config.yaml              # worker runtime config; inlined verbatim under ## Configuration
 └── docs/
     ├── intro.md             # intro paragraph(s) inserted after the title (README + skill.md)
@@ -181,7 +181,7 @@ Function signatures, payload schemas, and `RegisterFunction::new("…").descript
 └── skill.md        # single agent-facing file for iii://<worker> (leaves inlined)
 ```
 
-Two files, no `skills/` directory: each leaf is inlined into both artifacts under `## Additional HOWTOs`. Both files open with an identical YAML frontmatter block — `name`, `description`, `tags`, all sourced from `iii.worker.yaml` — that makes the worker searchable in the registry. Below the frontmatter, each artifact starts with a generated banner comment; everything after that is derived from your partials. Rendered files should never be hand-edited (the structure layer will flag drift and re-renders blow away your edits anyway).
+Two files, no `skills/` directory: each leaf is inlined into both artifacts under `## Additional HOWTOs`. Both files open with an identical YAML frontmatter block sourced from `iii.worker.yaml` — `name` (always present), plus `description` and `tags` when set — that makes the worker searchable in the registry. A missing `description` or `tags` is omitted from the block and reported as a structure-layer warning, not an error. Below the frontmatter, each artifact starts with a generated banner comment; everything after that is derived from your partials. Rendered files should never be hand-edited (the structure layer will flag drift and re-renders blow away your edits anyway).
 
 **README.md slot order:**
 

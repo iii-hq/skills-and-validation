@@ -40,7 +40,7 @@ description: One-sentence description that ends up in the README/skill.md frontm
 tags: "comma, separated, search, tags"
 ```
 
-`name`, `description`, and `tags` are all required: the renderer emits them as the searchable frontmatter block at the top of both `README.md` and `skill.md`, and render fails if any is missing or empty.
+`name` is required. `description` and `tags` are recommended: the renderer emits all present fields as the searchable frontmatter block at the top of both `README.md` and `skill.md`. A missing `description` or `tags` is omitted from the frontmatter and surfaces as a structure-layer warning (not an error), so the worker stays renderable but the registry can't index it well until you add them.
 
 ## `config.yaml`
 

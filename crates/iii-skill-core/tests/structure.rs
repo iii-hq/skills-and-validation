@@ -223,6 +223,54 @@ fn flags_leaf_whose_only_h1_lives_inside_llm_only_block() {
 }
 
 #[test]
+fn warns_on_missing_description_and_tags() {
+    use iii_skill_core::structure::Severity;
+
+    let tmp = TempDir::new().unwrap();
+    // Manifest with name only — no description, no tags.
+    std::fs::write(
+        tmp.path().join("iii.worker.yaml"),
+        "iii: v1\nname: fixture\nlanguage: rust\ndeploy: binary\nmanifest: Cargo.toml\nbin: fixture\n",
+    )
+    .unwrap();
+    std::fs::write(tmp.path().join("config.yaml"), "# Fixture.\nkey: value\n").unwrap();
+    std::fs::create_dir_all(tmp.path().join("docs")).unwrap();
+    std::fs::write(tmp.path().join("docs").join("intro.md"), "An intro.\n").unwrap();
+    std::fs::write(
+        tmp.path().join("docs").join("quickstart.md"),
+        "```rust\nfn main() {}\n```\n",
+    )
+    .unwrap();
+    let outputs = iii_skill_core::render::render_worker(tmp.path()).unwrap();
+    std::fs::write(tmp.path().join("README.md"), &outputs.readme).unwrap();
+    std::fs::write(tmp.path().join("skill.md"), &outputs.skill).unwrap();
+
+    let violations = iii_skill_core::structure::check(tmp.path()).unwrap();
+
+    // Both metadata gaps are warnings (not errors) against iii.worker.yaml.
+    for needle in ["description", "tags"] {
+        assert!(
+            violations.iter().any(|v| v.file == "iii.worker.yaml"
+                && v.severity == Severity::Warning
+                && v.message.contains(needle)),
+            "expected a {needle} warning, got: {violations:?}"
+        );
+    }
+    // No errors should be raised purely for the missing metadata.
+    assert!(
+        !violations.iter().any(|v| v.severity == Severity::Error
+            && v.message.to_lowercase().contains("frontmatter")),
+        "missing description/tags must not be a frontmatter error, got: {violations:?}"
+    );
+    // The rendered frontmatter omits the absent fields (only name present).
+    assert!(
+        outputs.skill.starts_with("---\nname: fixture\n---\n"),
+        "frontmatter should carry only name: {}",
+        &outputs.skill[..outputs.skill.find("\n\n").unwrap_or(60)]
+    );
+}
+
+#[test]
 fn flags_missing_frontmatter_in_skill() {
     let tmp = TempDir::new().unwrap();
     write_minimal_worker(tmp.path(), "fixture");
