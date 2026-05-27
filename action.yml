@@ -57,9 +57,10 @@ inputs:
       With `pr-diff`, on `pull_request` events only files changed in the
       PR (against the merge base) are validated; in worker mode, a
       changed file under `<worker-dir>/` validates the whole worker.
-      A diff that touches any `.skill-check.yaml` falls back to full
-      scan since those changes affect verdicts globally. On `push`
-      events `pr-diff` also falls back to full scan.
+      A diff that changes verdict-affecting `.skill-check.yaml` keys
+      (rules, model, system_prompt, ai_check, mode) falls back to full
+      scan; a change confined to `docs.include` / `docs.exclude` stays
+      scoped. On `push` events `pr-diff` also falls back to full scan.
     default: "all"
 
 runs:
@@ -240,14 +241,41 @@ runs:
         count=$(wc -l < "$out" | tr -d ' ')
         echo "PR diff: $count changed file(s)"
 
-        # Bail to full scan when any .skill-check.yaml changes — those
-        # affect verdicts globally (rules, model, ai_check settings).
-        # Workflow-file edits are NOT a bailout: the workflow controls
-        # execution shape (which layers run, glob scope) but not what
-        # the validator decides. A consumer who needs `layers: ai`
-        # added retroactively can opt out of pr-diff for that one PR.
-        if grep -Eq '(^|/)\.skill-check\.yaml$' "$out"; then
-          echo "::notice::pr-diff bailout — full scan triggered by .skill-check.yaml change"
+        # Bail to full scan when a .skill-check.yaml change affects
+        # verdicts (rules, model, system_prompt, ai_check, mode) — those
+        # can flip the verdict of files the PR never touched, so unchanged
+        # docs must be re-checked. A change confined to docs.include /
+        # docs.exclude is NOT a bailout: it only widens/narrows the file
+        # set and can't change the verdict of a file that stays in scope.
+        # (Bailing on an exclude-path tweak is what made unrelated,
+        # pre-existing docs get flagged nondeterministically by the AI
+        # layer.) Workflow-file edits are NOT a bailout either: the
+        # workflow controls execution shape (which layers run, glob scope)
+        # but not what the validator decides. config-verdict-changed.sh
+        # makes the per-file call; the base version is fetched from the PR
+        # base ref via the contents API (absent => new file => bails).
+        bail=0
+        config_changes="$(grep -E '(^|/)\.skill-check\.yaml$' "$out" || true)"
+        if [ -n "$config_changes" ]; then
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          while IFS= read -r cfg; do
+            [ -n "$cfg" ] || continue
+            base_tmp="$(mktemp)"
+            if ! gh api "repos/${GITHUB_REPOSITORY}/contents/${cfg}?ref=${base_sha}" \
+                  --jq '.content' 2>/dev/null | base64 -d > "$base_tmp" 2>/dev/null; then
+              : > "$base_tmp"   # absent at base (new config) => empty
+            fi
+            if "${{ github.action_path }}/scripts/config-verdict-changed.sh" "$base_tmp" "$cfg"; then
+              echo "::notice::pr-diff bailout — verdict-affecting change in $cfg"
+              bail=1
+            else
+              echo "$cfg changed only in docs.include/exclude — staying scoped"
+            fi
+            rm -f "$base_tmp"
+          done <<< "$config_changes"
+        fi
+
+        if [ "$bail" -eq 1 ]; then
           echo "changed-files=" >> "$GITHUB_OUTPUT"
         else
           echo "pr-diff scope: filtering to $count file(s)"
