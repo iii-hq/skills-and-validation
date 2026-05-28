@@ -1,0 +1,143 @@
+name: skill-check recheck
+
+# Reusable workflow: re-run skill-check with write: true when a PR
+# author or maintainer checks the "Re-render this branch and commit"
+# box in the sticky skill-check comment.
+#
+# Consumer usage:
+#
+#   # .github/workflows/skill-check-recheck.yml
+#   name: skill-check recheck
+#   on:
+#     issue_comment:
+#       types: [edited]
+#   jobs:
+#     recheck:
+#       uses: iii-hq/skills-and-validation/.github/workflows/recheck-on-comment.yml@v0.4
+#       with:
+#         config-path: .skill-check.yaml
+#         action-ref: v0.4
+#       secrets:
+#         anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+#
+# Constraints:
+#   - Only fires on a real transition: the checkbox must go from
+#     unchecked to checked. Editing other parts of the comment is a
+#     no-op.
+#   - Authorization: commenter must be the PR author OR have
+#     OWNER / MEMBER / COLLABORATOR association.
+#   - Fork PRs: GitHub does not allow GITHUB_TOKEN to push to forks, so
+#     this workflow detects the fork case, posts an explanatory comment,
+#     and exits without attempting a commit.
+
+on:
+  workflow_call:
+    inputs:
+      action-ref:
+        description: |
+          Ref of iii-hq/skills-and-validation to run (e.g. v0.4 or a
+          branch). Should match the pin used by the main skill-check
+          workflow so behavior stays consistent across the two.
+          GitHub does not allow expressions in `uses:`, so the action
+          is run via a local checkout at this ref.
+        type: string
+        default: "v0.4"
+      config-path:
+        description: |
+          Same value passed to the main skill-check workflow. Used to
+          match the sticky-comment marker so matrix consumers (separate
+          configs per matrix entry) don't cross-trigger.
+        type: string
+        default: ".skill-check.yaml"
+      docs-glob:
+        type: string
+        default: "**/*.md **/*.mdx"
+      workers-glob:
+        type: string
+        default: "*/iii.worker.yaml"
+      layers:
+        type: string
+        default: "structure,vale,ai"
+    secrets:
+      anthropic-api-key:
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    # Run only when:
+    #  - the edited comment is on a PR (issues without PRs lack head SHA),
+    #  - it carries our sticky marker for this config (matrix-safe),
+    #  - the re-render checkbox flipped from unchecked to checked
+    #    (`changes.body.from` is the previous body),
+    #  - the commenter is the PR author or has write access.
+    if: |
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, format('<!-- skill-check-status-comment:{0} -->', inputs.config-path)) &&
+      contains(github.event.comment.body, '- [x] **Re-render this branch and commit rendered artifacts**') &&
+      !contains(github.event.changes.body.from, '- [x] **Re-render this branch and commit rendered artifacts**') &&
+      (
+        github.event.comment.user.login == github.event.issue.user.login ||
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      )
+    steps:
+      - name: Resolve PR head and fork status
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_num="${{ github.event.issue.number }}"
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_num}" > /tmp/pr.json
+          head_sha=$(jq -r '.head.sha'              /tmp/pr.json)
+          head_ref=$(jq -r '.head.ref'              /tmp/pr.json)
+          is_fork=$(jq -r  '.head.repo.fork // false' /tmp/pr.json)
+          echo "sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "ref=$head_ref" >> "$GITHUB_OUTPUT"
+          echo "fork=$is_fork" >> "$GITHUB_OUTPUT"
+
+      - name: Explain fork limitation (and exit)
+        if: ${{ steps.pr.outputs.fork == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_num="${{ github.event.issue.number }}"
+          commenter="${{ github.event.comment.user.login }}"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${pr_num}/comments" \
+            -f body="@${commenter} — re-render on demand is not supported for fork PRs (CI cannot push to forks). Pull this branch locally, run \`iii-skill-render <target> --write\`, and push the resulting commit." \
+            >/dev/null
+          echo "::notice::fork PR; cannot auto-render. Posted instructions and exiting."
+
+      - name: Check out PR head
+        if: ${{ steps.pr.outputs.fork != 'true' }}
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.pr.outputs.sha }}
+
+      # `uses:` does not accept expressions, so we check out the action
+      # source at the requested ref into a sibling path and call it via
+      # `uses: ./<path>` below. This keeps the action ref parametric so
+      # the recheck stays in sync with the main workflow's pin.
+      - name: Fetch action source at requested ref
+        if: ${{ steps.pr.outputs.fork != 'true' }}
+        uses: actions/checkout@v5
+        with:
+          repository: iii-hq/skills-and-validation
+          ref: ${{ inputs.action-ref }}
+          path: .skv-action
+
+      - name: Run skill-check with write enabled
+        if: ${{ steps.pr.outputs.fork != 'true' }}
+        uses: ./.skv-action
+        with:
+          config-path: ${{ inputs.config-path }}
+          docs-glob: ${{ inputs.docs-glob }}
+          workers-glob: ${{ inputs.workers-glob }}
+          layers: ${{ inputs.layers }}
+          write: true
+          scope: all
+          anthropic-api-key: ${{ secrets.anthropic-api-key }}

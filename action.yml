@@ -384,6 +384,7 @@ runs:
     # the PR branch — which moves the PR head off the SHA the check
     # runs are anchored to and breaks the failing-status display.
     - name: Commit and push rendered diff (write mode)
+      id: commit
       if: ${{ success() && inputs.write == 'true' && github.event_name == 'pull_request' && steps.render.outputs.drift == 'present' }}
       shell: bash
       env:
@@ -448,6 +449,24 @@ runs:
         done
         echo "::warning::auto-render push failed after 5 attempts"
         exit 1
+
+    # Surface drift in the sticky PR comment. The verify step builds the
+    # summary from in-scope artifacts only; drift in unchanged artifacts
+    # (caught by render's global drift check) was previously invisible to
+    # the comment, so a "0 verified, 0 skipped" run with drift posted a
+    # "three for three" success message while the job itself went red.
+    # Augment the summary file in place before the comment step reads it.
+    - name: Augment summary with drift status
+      if: ${{ always() && steps.render.outputs.drift == 'present' && steps.verify.outputs.summary != '' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        BODY: ${{ steps.verify.outputs.summary }}
+        WRITE_MODE: ${{ inputs.write }}
+        COMMIT_OUTCOME: ${{ steps.commit.outcome }}
+        PR_IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+      run: |
+        "${{ github.action_path }}/scripts/augment-summary-drift.sh" \
+          "$BODY" "$WRITE_MODE" "$COMMIT_OUTCOME" "$PR_IS_FORK"
 
     - name: Fail on drift (read-only mode)
       if: ${{ always() && inputs.write != 'true' && steps.render.outputs.drift == 'present' }}
