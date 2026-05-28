@@ -356,6 +356,7 @@ runs:
         "${{ github.action_path }}/scripts/summary.sh" \
           "$log" \
           "${{ steps.mode.outputs.mode }}" \
+          "${{ steps.render.outputs.drift }}" \
           > "$body"
         cat "$body" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
