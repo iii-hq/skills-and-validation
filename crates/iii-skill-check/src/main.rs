@@ -84,7 +84,27 @@ impl From<DocTypeArg> for iii_skill_core::docs::frontmatter::DocType {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() {
+    // Validation failures, drift, and usage errors are *expected*
+    // outcomes that the rest of the binary surfaces via `anyhow::bail!`.
+    // If we returned `anyhow::Result<()>` from main, Rust's default
+    // Termination impl prints the error with anyhow's backtrace block
+    // — a misleading "Stack backtrace: ..." dump under a routine
+    // "3 error(s) across layers" or "rendered artifacts are out of
+    // date" line. Print Display-only and exit 1 instead so reported
+    // violations stay the last thing the user sees.
+    //
+    // Real panics in the binary bypass this path entirely (the panic
+    // hook fires from `panic!`/`unwrap`), so genuine bugs still get
+    // their usual "thread 'main' panicked at ..." message with
+    // backtrace under RUST_BACKTRACE.
+    if let Err(e) = run() {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     iii_skill_core::update_check::run_gate(cli.allow_old_version);
     match cli.command {

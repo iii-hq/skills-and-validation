@@ -10,7 +10,7 @@ Some context belongs in the skill (visible to AI agents) but not in the publishe
 
 ## MDX (`.mdx`) sources
 
-In docs-mode, `.mdx` files are rendered to humans by Mintlify *directly* — the docs site shows the raw source after MDX processing. **Only the single-line inline form hides content from humans there; the block form does not.** The block form (`{/* llm-only:start */}` … `{/* llm-only:end */}`) does *not* work in MDX: each marker is its own single-line comment that Mintlify hides, but the prose between them is regular MDX content and renders normally. Mintlify also does not treat a multi-line `{/* … */}` as a single comment, so wrapping a payload across lines does not help.
+In docs-mode, `.mdx` files are rendered to humans by Mintlify *directly*: the docs site shows the raw source after MDX processing. **Only the single-line inline form hides content from humans there; the block form does not.** The block form (`{/* llm-only:start */}` … `{/* llm-only:end */}`) does *not* work in MDX: each marker is its own single-line comment that Mintlify hides, but the prose between them is regular MDX content and renders normally. Mintlify also does not treat a multi-line `{/* … */}` as a single comment, so wrapping a payload across lines does not help.
 
 Use the inline form:
 
@@ -20,11 +20,11 @@ The engine reads `config.yaml` from the cwd {/* llm-only: when generating a scri
 
 The published page shows the surrounding prose with the comment stripped. The `.skill.md` sibling expands the comment to its payload so the LLM sees it.
 
-If you need a multi-line LLM-only payload in docs-mode, move that content into a worker `.md` partial — those *are* run through the renderer and support the block form (see below). There is no clean way to hide a multi-line llm-only block in MDX today.
+If you need a multi-line LLM-only payload in docs-mode, move that content into a worker `.md` partial; those *are* run through the renderer and support the block form (see below). There is no clean way to hide a multi-line llm-only block in MDX today.
 
 ## Worker `.md` partials
 
-Worker `docs/*.md` partials are not rendered to readers directly — `iii-skill-render` produces both the human-facing `README.md` and the LLM-facing `skill.md` / `skills/*.md` from the same source. Both shapes work:
+Worker `docs/*.md` partials are not rendered to readers directly; `iii-skill-render` produces both the human-facing `README.md` and the LLM-facing `skill.md` / `skills/*.md` from the same source. Both shapes work:
 
 ```markdown
 ## Configuration
