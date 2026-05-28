@@ -4,17 +4,25 @@
 # verify step itself didn't see (drift on artifacts outside the pr-diff
 # scope).
 #
-# Usage: augment-summary-drift.sh <body-file> <write-mode> <commit-outcome> <pr-is-fork>
+# Usage: augment-summary-drift.sh <body-file> <write-mode> <commit-status> <pr-is-fork>
 #
-# write-mode:      `true` if the consumer opted into auto-commit, else `false`
-# commit-outcome:  `success` / `failure` / `skipped` from the commit step
-# pr-is-fork:      `true` for cross-repo PRs (CI cannot push back) else `false`
+# write-mode:     `true` if the consumer opted into auto-commit, else `false`
+# commit-status:  explicit signal from the action's commit step:
+#                   `success`  → committed and pushed
+#                   `noop`     → drift outside the scoped add-set, nothing committed
+#                   `failure`  → tried to push, gave up after retries
+#                   (empty)    → commit step was skipped (verify failed, or write:false)
+# pr-is-fork:     `true` for cross-repo PRs (CI cannot push back) else `false`
 #
-# Four variants in priority order:
-#   1. write:true + commit succeeded → CI committed the re-render
-#   2. write:true + commit failed    → auto-commit failed
-#   3. write:false + fork PR         → can't push to fork; re-render locally
-#   4. write:false + same-repo PR    → checkbox to trigger a re-render run
+# Branching, in priority order:
+#   1. write:true + committed=success → CI committed; pull locally to sync
+#   2. write:true + committed=noop    → drift outside scope; nothing pushed
+#   3. write:true + committed=failure → auto-commit attempted but push failed
+#   4. write:true + committed empty   → commit step was skipped (verify
+#                                       failed first); fix verify and the
+#                                       next push will re-render
+#   5. write:false + fork PR          → can't push to forks; re-render locally
+#   6. write:false + same-repo PR     → checkbox to trigger a re-render run
 #
 # The checkbox label is matched verbatim by the issue_comment listener
 # (recheck-on-comment.yml). If you edit it here, edit there too.
@@ -23,7 +31,7 @@ set -euo pipefail
 
 body="${1:?missing body-file arg}"
 write="${2:-false}"
-commit_outcome="${3:-}"
+committed="${3:-}"
 fork="${4:-false}"
 
 [ -f "$body" ] || { echo "augment-summary: body file not found: $body" >&2; exit 0; }
@@ -34,14 +42,24 @@ fork="${4:-false}"
   printf '> **Rendered artifacts are out of date** — sources changed without re-rendering.\n'
 } >> "$body"
 
-if [ "$write" = "true" ] && [ "$commit_outcome" = "success" ]; then
-  {
-    printf '> CI committed the re-render to this branch. **Run `git pull` to sync your local copy** before pushing further commits.\n'
-  } >> "$body"
-elif [ "$write" = "true" ]; then
-  {
-    printf '> Auto-commit of the re-render failed — see the workflow logs.\n'
-  } >> "$body"
+if [ "$write" = "true" ]; then
+  case "$committed" in
+    success)
+      printf '> CI committed the re-render to this branch. **Run `git pull` to sync your local copy** before pushing further commits.\n' >> "$body"
+      ;;
+    noop)
+      printf '> Drift was outside the scoped auto-commit paths (typically untracked files) — nothing was pushed. See the workflow logs.\n' >> "$body"
+      ;;
+    failure)
+      printf '> Auto-commit was attempted but the push failed — see the workflow logs.\n' >> "$body"
+      ;;
+    "")
+      printf '> Auto-commit was skipped because verify failed first. Fix the errors above and the next push will re-render.\n' >> "$body"
+      ;;
+    *)
+      printf '> Unknown commit status (`%s`) — see the workflow logs.\n' "$committed" >> "$body"
+      ;;
+  esac
 elif [ "$fork" = "true" ]; then
   {
     printf '>\n'

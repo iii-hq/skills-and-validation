@@ -39,8 +39,11 @@ strip_scope() {
         if (ind > blockind) next         # list item / nested mapping: drop
         inblock = 0                      # dedented: block ended, fall through
       }
-      if ($0 ~ /^[ ]+(include|exclude):[ ]*$/) { inblock = 1; blockind = ind; next }
-      if ($0 ~ /^[ ]+(include|exclude):[ ]*\[/) next   # inline flow list on one line
+      # Block form: optional trailing `# comment` on the key line itself
+      # (e.g. `exclude: # parked tutorials`) is still a block-form key.
+      if ($0 ~ /^[ ]+(include|exclude):[ ]*(#.*)?$/) { inblock = 1; blockind = ind; next }
+      # Inline flow list on one line (also tolerates `exclude: ["a"] # note`).
+      if ($0 ~ /^[ ]+(include|exclude):[ ]*\[/) next
       print
     }
   ' "$1"

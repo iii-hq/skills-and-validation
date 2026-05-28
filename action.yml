@@ -62,6 +62,16 @@ inputs:
       scan; a change confined to `docs.include` / `docs.exclude` stays
       scoped. On `push` events `pr-diff` also falls back to full scan.
     default: "all"
+  target-branch:
+    description: |
+      Branch to push the auto-render commit to when `write: true` and
+      drift is present. Defaults to the empty string; the action then
+      falls back to `$GITHUB_HEAD_REF` (set by the runner on
+      `pull_request` events). Set this explicitly when invoking the
+      action from `issue_comment` (e.g. the recheck-on-comment reusable
+      workflow) — in that context `$GITHUB_HEAD_REF` is unset and the
+      push would have no target.
+    default: ""
 
 runs:
   using: composite
@@ -261,8 +271,12 @@ runs:
           while IFS= read -r cfg; do
             [ -n "$cfg" ] || continue
             base_tmp="$(mktemp)"
+            # base64 decode via python so consumers on macOS runners (BSD
+            # base64 uses `-D`, not `-d`) get the same behavior as Linux.
             if ! gh api "repos/${GITHUB_REPOSITORY}/contents/${cfg}?ref=${base_sha}" \
-                  --jq '.content' 2>/dev/null | base64 -d > "$base_tmp" 2>/dev/null; then
+                  --jq '.content' 2>/dev/null \
+                | python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read()))' \
+                > "$base_tmp" 2>/dev/null; then
               : > "$base_tmp"   # absent at base (new config) => empty
             fi
             if "${{ github.action_path }}/scripts/config-verdict-changed.sh" "$base_tmp" "$cfg"; then
@@ -384,13 +398,35 @@ runs:
     # run on verify failures too, pushing un-validated bot commits to
     # the PR branch — which moves the PR head off the SHA the check
     # runs are anchored to and breaks the failing-status display.
+    #
+    # The step accepts both `pull_request` (default GITHUB_HEAD_REF) and
+    # `issue_comment` (target-branch input passed by the recheck-on-
+    # comment listener) so a checkbox-triggered re-render actually
+    # commits. The push target is resolved at runtime; if neither is
+    # set, the step emits `committed=failure` and exits 1.
+    #
+    # The `committed` output is the canonical signal for downstream
+    # steps and for augment-summary-drift.sh: `success` | `noop` |
+    # `failure`. The default GitHub `steps.commit.outcome` alone
+    # conflates "step skipped because verify failed" (the right user-
+    # facing message is "skipped, fix verify first") with "step ran but
+    # found nothing to commit" (the right message is "noop") and with
+    # the actual happy path.
     - name: Commit and push rendered diff (write mode)
       id: commit
-      if: ${{ success() && inputs.write == 'true' && github.event_name == 'pull_request' && steps.render.outputs.drift == 'present' }}
+      if: ${{ success() && inputs.write == 'true' && steps.render.outputs.drift == 'present' && (github.event_name == 'pull_request' || github.event_name == 'issue_comment') }}
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        target="${{ inputs.target-branch }}"
+        target="${target:-${GITHUB_HEAD_REF:-}}"
+        if [ -z "$target" ]; then
+          echo "::error::no target branch for auto-render push — pass \`target-branch\` input or run on a pull_request event"
+          echo "committed=failure" >> "$GITHUB_OUTPUT"
+          exit 1
+        fi
+
         git config user.name  "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -418,6 +454,7 @@ runs:
 
         if git diff --cached --quiet; then
           echo "no rendered artifacts to commit (drift was outside the scoped add-set)"
+          echo "committed=noop" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -433,22 +470,25 @@ runs:
         # paths between matrix runs — abort and surface a warning
         # rather than paper over a real merge issue.
         for attempt in 1 2 3 4 5; do
-          if git push origin "HEAD:${GITHUB_HEAD_REF}"; then
+          if git push origin "HEAD:${target}"; then
             [ "$attempt" -gt 1 ] && \
               echo "auto-render push succeeded on attempt $attempt"
-            echo "committed rendered drift to ${GITHUB_HEAD_REF}"
+            echo "committed rendered drift to ${target}"
+            echo "committed=success" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "::notice::auto-render push rejected (attempt $attempt); fetching + rebasing"
-          git fetch --quiet origin "${GITHUB_HEAD_REF}" || true
-          if ! git rebase --quiet "origin/${GITHUB_HEAD_REF}"; then
+          git fetch --quiet origin "${target}" || true
+          if ! git rebase --quiet "origin/${target}"; then
             git rebase --abort 2>/dev/null || true
-            echo "::warning::auto-render rebase conflicted with origin/${GITHUB_HEAD_REF}; re-render locally and push."
+            echo "::warning::auto-render rebase conflicted with origin/${target}; re-render locally and push."
+            echo "committed=failure" >> "$GITHUB_OUTPUT"
             exit 1
           fi
           sleep "$attempt"
         done
         echo "::warning::auto-render push failed after 5 attempts"
+        echo "committed=failure" >> "$GITHUB_OUTPUT"
         exit 1
 
     # Surface drift in the sticky PR comment. The verify step builds the
@@ -457,17 +497,22 @@ runs:
     # the comment, so a "0 verified, 0 skipped" run with drift posted a
     # "three for three" success message while the job itself went red.
     # Augment the summary file in place before the comment step reads it.
+    #
+    # COMMIT_STATUS is the explicit signal from the commit step:
+    # `success` (committed + pushed), `noop` (nothing to commit), or
+    # `failure` (push failed after retries). Empty when the commit step
+    # was skipped (write: false, or verify failed first).
     - name: Augment summary with drift status
-      if: ${{ always() && steps.render.outputs.drift == 'present' && steps.verify.outputs.summary != '' && github.event_name == 'pull_request' }}
+      if: ${{ always() && steps.render.outputs.drift == 'present' && steps.verify.outputs.summary != '' && (github.event_name == 'pull_request' || github.event_name == 'issue_comment') }}
       shell: bash
       env:
         BODY: ${{ steps.verify.outputs.summary }}
         WRITE_MODE: ${{ inputs.write }}
-        COMMIT_OUTCOME: ${{ steps.commit.outcome }}
-        PR_IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        COMMIT_STATUS: ${{ steps.commit.outputs.committed }}
+        PR_IS_FORK: ${{ github.event.pull_request.head.repo.fork || 'false' }}
       run: |
         "${{ github.action_path }}/scripts/augment-summary-drift.sh" \
-          "$BODY" "$WRITE_MODE" "$COMMIT_OUTCOME" "$PR_IS_FORK"
+          "$BODY" "$WRITE_MODE" "$COMMIT_STATUS" "$PR_IS_FORK"
 
     - name: Fail on drift (read-only mode)
       if: ${{ always() && inputs.write != 'true' && steps.render.outputs.drift == 'present' }}
@@ -477,13 +522,16 @@ runs:
         exit 1
 
     - name: Post sticky PR comment (opt-in via pull-requests:write)
-      if: ${{ always() && github.event_name == 'pull_request' && steps.verify.outputs.summary != '' }}
+      if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'issue_comment') && steps.verify.outputs.summary != '' }}
       continue-on-error: true
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        # PR number sits in different places depending on the event:
+        # `pull_request.number` for the main check, `issue.number` for
+        # the issue_comment-driven recheck (the issue *is* the PR).
         "${{ github.action_path }}/scripts/pr-comment.sh" \
-          "${{ github.event.pull_request.number }}" \
+          "${{ github.event.pull_request.number || github.event.issue.number }}" \
           "${{ steps.verify.outputs.summary }}" \
           "${{ inputs.config-path }}"

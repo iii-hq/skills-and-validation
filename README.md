@@ -151,7 +151,7 @@ jobs:
 
 Critical: GitHub runs `issue_comment` workflows from the **default branch only** (security feature). The file must be merged to `main` before the box does anything — adding it on a feature branch won't fire the listener for that PR. After merge, the box re-runs the action with `write: true` on the PR head.
 
-Gating: the commenter must be the PR author OR have OWNER / MEMBER / COLLABORATOR association. Fork PRs short-circuit with an explanatory comment — `GITHUB_TOKEN` cannot push to forks.
+Gating: the commenter must have OWNER / MEMBER / COLLABORATOR association on the repo. PR authors who lack write access can't trigger the auto-commit — they're expected to re-render locally and push themselves. Fork PRs short-circuit with an explanatory comment — `GITHUB_TOKEN` cannot push to forks.
 
 ---
 

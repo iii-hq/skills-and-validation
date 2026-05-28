@@ -29,8 +29,10 @@ name: skill-check recheck
 #   - Only fires on a real transition: the checkbox must go from
 #     unchecked to checked. Editing other parts of the comment is a
 #     no-op.
-#   - Authorization: commenter must be the PR author OR have
-#     OWNER / MEMBER / COLLABORATOR association.
+#   - Authorization: commenter must have OWNER / MEMBER / COLLABORATOR
+#     association on this repo. PR authors are NOT auto-allowed — even
+#     for same-repo PRs, the auto-commit pushes from a write-scoped
+#     GITHUB_TOKEN; gating on repo write access keeps that explicit.
 #   - Fork PRs: GitHub does not allow GITHUB_TOKEN to push to forks, so
 #     this workflow detects the fork case, posts an explanatory comment,
 #     and exits without attempting a commit.
@@ -80,16 +82,15 @@ jobs:
     #  - it carries our sticky marker for this config (matrix-safe),
     #  - the re-render checkbox flipped from unchecked to checked
     #    (`changes.body.from` is the previous body),
-    #  - the commenter is the PR author or has write access.
+    #  - the commenter has OWNER / MEMBER / COLLABORATOR association on
+    #    this repo (PR authors who lack write access can't trigger the
+    #    auto-commit — they're expected to push the re-render themselves).
     if: |
       github.event.issue.pull_request &&
       contains(github.event.comment.body, format('<!-- skill-check-status-comment:{0} -->', inputs.config-path)) &&
       contains(github.event.comment.body, '- [x] **Re-render this branch and commit rendered artifacts**') &&
       !contains(github.event.changes.body.from, '- [x] **Re-render this branch and commit rendered artifacts**') &&
-      (
-        github.event.comment.user.login == github.event.issue.user.login ||
-        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
-      )
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     steps:
       - name: Resolve PR head and fork status
         id: pr
@@ -145,4 +146,8 @@ jobs:
           layers: ${{ inputs.layers }}
           write: true
           scope: all
+          # On issue_comment events the runner does not set
+          # GITHUB_HEAD_REF, so the action's commit step needs the push
+          # target passed explicitly. PR head branch from steps.pr.
+          target-branch: ${{ steps.pr.outputs.ref }}
           anthropic-api-key: ${{ secrets.anthropic-api-key }}
