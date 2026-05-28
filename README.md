@@ -33,7 +33,7 @@ The installer places binaries at `~/.local/bin/iii-skill-{render,check}` and the
 
 This is the bundle agents (and you) read to know how to write worker partials. Pick whichever surface fits your tooling.
 
-**`skillkit`** — installs both `iii-skill-authoring` and `iii-doc-authoring`:
+**`skillkit`**: installs both `iii-skill-authoring` and `iii-doc-authoring`:
 
 ```bash
 cd $HOME && npx skillkit add iii-hq/skills-and-validation/content/skills
@@ -131,7 +131,7 @@ When `scope: pr-diff` is in use, the verify step can pass while rendered artifac
 - [ ] **Re-render this branch and commit rendered artifacts**
 ```
 
-Adopt the opt-in listener so the box actually triggers a re-render. Add this **separate** workflow file:
+Adopt the opt-in listener so the box triggers a re-render. Add this **separate** workflow file:
 
 ```yaml
 # .github/workflows/skill-check-recheck.yml
@@ -160,10 +160,10 @@ jobs:
 
 Two critical constraints:
 
-1. **The file must live on the default branch.** GitHub runs `issue_comment` workflows from `main` only (security feature). Adding it on a feature branch is a no-op for that PR — merge to `main` first, then the box works on all future PRs.
-2. **You must grant `permissions:` in this consumer file.** Reusable workflows don't inherit the callee's permission declaration — the caller does.
+1. **The file must live on the default branch.** GitHub runs `issue_comment` workflows from `main` only (security feature). Adding it on a feature branch is a no-op for that PR; merge to `main` first, then the box works on all future PRs.
+2. **You must grant `permissions:` in this consumer file.** Reusable workflows don't inherit the callee's permission declaration; the caller does.
 
-Gating: the user who edited the comment (`github.event.sender`) must have `admin` / `maintain` / `write` access on the repo — checked via the collaborators API at run time. The bot that posted the comment is irrelevant to authorization. PR authors who lack write access can't trigger the auto-commit; they're expected to re-render locally and push themselves. Fork PRs short-circuit with an explanatory comment — `GITHUB_TOKEN` cannot push to forks.
+Gating: the user who edited the comment (`github.event.sender`) must have `admin` / `maintain` / `write` access on the repo, checked via the collaborators API at run time. The bot that posted the comment is irrelevant to authorization. PR authors who lack write access can't trigger the auto-commit; they're expected to re-render locally and push themselves. Fork PRs short-circuit with an explanatory comment, because `GITHUB_TOKEN` cannot push to forks.
 
 ---
 
@@ -211,10 +211,10 @@ The same files are on disk under `~/.local/share/skill-check/current/content/ski
 
 Notes on the inputs:
 
-- **`docs/intro.md`** — one or two short paragraphs: what the worker does, who calls it, the single most important thing it gives you. Can contain `<!-- llm-only:start --> ... <!-- llm-only:end -->` blocks for agent-only routing hints.
-- **`docs/quickstart.md`** — the meat of the README. Show one fenced code block per SDK language (Rust `iii_sdk`, TypeScript `iii-sdk`, Python `iii`), ≤ 30 lines each, with a realistic payload and the expected output/result. One to three functions, chosen for introductory value, not breadth.
-- **`docs/leaves/<leaf>.md`** — the leaf name is the suffix of the function id after the last `::`. `textstats::analyze` → `docs/leaves/analyze.md`. H1 is a topical phrase (`# Sizing text before provider calls`), never the function id. Canonical sections: `## When to use` (three to five bullets of realistic call sites) and `## Notes` (gotchas, edge cases an agent will trip on).
-- **`config.yaml`** — runtime config for the worker itself. The renderer inlines it verbatim under `## Configuration`. It preserves comments and all `config.yaml` entries should contain accompanying comments on usage.
+- **`docs/intro.md`**: one or two short paragraphs covering what the worker does, who calls it, and the single most important thing it gives you. Can contain `<!-- llm-only:start --> ... <!-- llm-only:end -->` blocks for agent-only routing hints.
+- **`docs/quickstart.md`**: the meat of the README. Show one fenced code block per SDK language (Rust `iii_sdk`, TypeScript `iii-sdk`, Python `iii`), ≤ 30 lines each, with a realistic payload and the expected output/result. One to three functions, chosen for introductory value, not breadth.
+- **`docs/leaves/<leaf>.md`**: the leaf name is the suffix of the function id after the last `::`. `textstats::analyze` → `docs/leaves/analyze.md`. H1 is a topical phrase (`# Sizing text before provider calls`), never the function id. Canonical sections: `## When to use` (three to five bullets of realistic call sites) and `## Notes` (gotchas, edge cases an agent will trip on).
+- **`config.yaml`**: runtime config for the worker itself. The renderer inlines it verbatim under `## Configuration`. It preserves comments and all `config.yaml` entries should contain accompanying comments on usage.
 
 Function signatures, payload schemas, and `RegisterFunction::new("…").description("…")` text are generated by a separate auto-gen system (iii-directory worker). Don't duplicate them in the partials.
 
@@ -226,7 +226,7 @@ Function signatures, payload schemas, and `RegisterFunction::new("…").descript
 └── skill.md        # single agent-facing file for iii://<worker> (leaves inlined)
 ```
 
-Two files, no `skills/` directory: each leaf is inlined into both artifacts under `## Additional HOWTOs`. Both files open with an identical YAML frontmatter block sourced from `iii.worker.yaml` — `name` (always present), plus `description` and `tags` when set — that makes the worker searchable in the registry. A missing `description` or `tags` is omitted from the block and reported as a structure-layer warning, not an error. Below the frontmatter, each artifact starts with a generated banner comment; everything after that is derived from your partials. Rendered files should never be hand-edited (the structure layer will flag drift and re-renders blow away your edits anyway).
+Two files, no `skills/` directory: each leaf is inlined into both artifacts under `## Additional HOWTOs`. Both files open with an identical YAML frontmatter block sourced from `iii.worker.yaml` (`name` is always present; `description` and `tags` when set) that makes the worker searchable in the registry. A missing `description` or `tags` is omitted from the block and reported as a structure-layer warning, not an error. Below the frontmatter, each artifact starts with a generated banner comment; everything after that is derived from your partials. Rendered files should never be hand-edited (the structure layer will flag drift and re-renders blow away your edits anyway).
 
 **README.md slot order:**
 
@@ -284,7 +284,7 @@ A single source partial can carry three audiences cleanly: plain prose (everyone
 
 Marker lines must each sit on their own line. The structure layer balance-checks both block types per file; an unclosed `:start` fails verify. HTML and MDX forms count together, so a block opened in one form and closed in the other still balances.
 
-### Worker `.md` partials — every form works
+### Worker `.md` partials (every form works)
 
 Worker partials are never rendered to humans directly. The renderer produces `README.md` (humans) and `skill.md` (agents) from the same source, so block and inline forms both work fully for both `llm-only` and `human-only`. Use whichever fits the payload.
 
@@ -325,16 +325,16 @@ Mintlify treats MDX comments as line-by-line
 
 MDX files in docs mode are rendered to humans directly by Mintlify. Mintlify treats `{/* … */}` as an invisible single-line comment per line; it does not collapse a multi-line `{/* … */}` span into one comment. That asymmetry decides which form works for each directive:
 
-- **`llm-only` in `.mdx`** — only the inline form hides from humans, and the comment must be on a line of its own (mid-paragraph inline comments are not parsed):
+- **`llm-only` in `.mdx`**: only the inline form hides from humans, and the comment must be on a line of its own (mid-paragraph inline comments are not parsed):
 
   ```mdx
   The worker exposes `set_token`.
   {/* llm-only: call this before any other op; tokens cache for 60s */}
   ```
 
-  The block form `{/* llm-only:start */}` … `{/* llm-only:end */}` is still parsed by the renderer (so `skill.md` is correct), but the prose between the markers is regular MDX content that Mintlify renders to readers. The `:start`/`:end` lines themselves are invisible; the body between them leaks. There is no way to hide a multi-line `llm-only` span in MDX today — keep the payload to a short inline comment, or move it to a worker `.md` partial.
+  The block form `{/* llm-only:start */}` … `{/* llm-only:end */}` is still parsed by the renderer (so `skill.md` is correct), but the prose between the markers is regular MDX content that Mintlify renders to readers. The `:start`/`:end` lines themselves are invisible; the body between them leaks. There is no way to hide a multi-line `llm-only` span in MDX today; keep the payload to a short inline comment, or move it to a worker `.md` partial.
 
-- **`human-only` in `.mdx`** — use the block form when you want humans to see the payload:
+- **`human-only` in `.mdx`**: use the block form when you want humans to see the payload:
 
   ```mdx
   {/* human-only:start */}
@@ -344,7 +344,7 @@ MDX files in docs mode are rendered to humans directly by Mintlify. Mintlify tre
 
   Mintlify treats both marker lines as invisible comments and renders the body in between as ordinary prose, which is exactly what `human-only` wants for the human-facing side. The renderer then strips the entire block from `<source>.skill.md` so the agent never sees it.
 
-  The inline form `{/* human-only: … */}` does _not_ work in `.mdx` — Mintlify drops the whole comment, so the payload is invisible to readers too. No render pass runs between the source and Mintlify to expand it. Reserve inline `human-only` for worker `.md` partials and for maintainer notes the agent should never see (the dropped-from-`skill.md` behavior, with no human surface).
+  The inline form `{/* human-only: … */}` does _not_ work in `.mdx`; Mintlify drops the whole comment, so the payload is invisible to readers too. No render pass runs between the source and Mintlify to expand it. Reserve inline `human-only` for worker `.md` partials and for maintainer notes the agent should never see (the dropped-from-`skill.md` behavior, with no human surface).
 
 Full authoring guides ship under `content/skills/iii-skill-authoring/llm-only-blocks.md` (worker mode) and `content/skills/iii-doc-authoring/llm-only-blocks.md` (docs mode); `human-only-blocks.md` exists in both bundles. Read via `skillkit read iii-skill-authoring/llm-only-blocks` etc.
 
