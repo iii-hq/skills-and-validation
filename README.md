@@ -139,6 +139,15 @@ name: skill-check recheck
 on:
   issue_comment:
     types: [edited]
+
+# Reusable workflows do NOT inherit the callee's `permissions:` —
+# the caller has to grant them, or GitHub fails the job with a
+# startup_failure before any step runs.
+permissions:
+  contents: write          # push the auto-render commit
+  pull-requests: write     # update the sticky comment
+  actions: write           # AI skip-cache (actions/cache)
+
 jobs:
   recheck:
     uses: iii-hq/skills-and-validation/.github/workflows/recheck-on-comment.yml@v0.4
@@ -149,7 +158,10 @@ jobs:
       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-Critical: GitHub runs `issue_comment` workflows from the **default branch only** (security feature). The file must be merged to `main` before the box does anything — adding it on a feature branch won't fire the listener for that PR. After merge, the box re-runs the action with `write: true` on the PR head.
+Two critical constraints:
+
+1. **The file must live on the default branch.** GitHub runs `issue_comment` workflows from `main` only (security feature). Adding it on a feature branch is a no-op for that PR — merge to `main` first, then the box works on all future PRs.
+2. **You must grant `permissions:` in this consumer file.** Reusable workflows don't inherit the callee's permission declaration — the caller does.
 
 Gating: the user who edited the comment (`github.event.sender`) must have `admin` / `maintain` / `write` access on the repo — checked via the collaborators API at run time. The bot that posted the comment is irrelevant to authorization. PR authors who lack write access can't trigger the auto-commit; they're expected to re-render locally and push themselves. Fork PRs short-circuit with an explanatory comment — `GITHUB_TOKEN` cannot push to forks.
 
