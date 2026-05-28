@@ -81,18 +81,44 @@ jobs:
     #  - the edited comment is on a PR (issues without PRs lack head SHA),
     #  - it carries our sticky marker for this config (matrix-safe),
     #  - the re-render checkbox flipped from unchecked to checked
-    #    (`changes.body.from` is the previous body),
-    #  - the commenter has OWNER / MEMBER / COLLABORATOR association on
-    #    this repo (PR authors who lack write access can't trigger the
-    #    auto-commit — they're expected to push the re-render themselves).
+    #    (`changes.body.from` is the previous body).
+    # Authorization is enforced in the first step below (not here), because
+    # `comment.author_association` reflects the comment author — our sticky
+    # comment is posted by `github-actions[bot]`, whose association is
+    # never OWNER/MEMBER/COLLABORATOR. We have to check `sender` (the
+    # editor) via the collaborators API.
     if: |
       github.event.issue.pull_request &&
       contains(github.event.comment.body, format('<!-- skill-check-status-comment:{0} -->', inputs.config-path)) &&
       contains(github.event.comment.body, '- [x] **Re-render this branch and commit rendered artifacts**') &&
-      !contains(github.event.changes.body.from, '- [x] **Re-render this branch and commit rendered artifacts**') &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      !contains(github.event.changes.body.from, '- [x] **Re-render this branch and commit rendered artifacts**')
     steps:
+      - name: Verify sender has write access
+        id: auth
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          # collaborators/{user}/permission returns:
+          #   admin / maintain / write / triage / read / none.
+          # We require admin, maintain, or write. A 404 from the API
+          # (user is not a collaborator at all) falls into the default
+          # "none" branch — listener skips, no failure.
+          perm=$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${SENDER}/permission" \
+                  --jq '.permission' 2>/dev/null || echo "none")
+          case "$perm" in
+            admin|maintain|write)
+              echo "::notice::recheck authorized: ${SENDER} has '${perm}' access"
+              echo "authorized=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::notice::recheck rejected: ${SENDER} has '${perm}' access (need admin/maintain/write)"
+              echo "authorized=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - name: Resolve PR head and fork status
+        if: ${{ steps.auth.outputs.authorized == 'true' }}
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,7 +145,7 @@ jobs:
           echo "::notice::fork PR; cannot auto-render. Posted instructions and exiting."
 
       - name: Check out PR head
-        if: ${{ steps.pr.outputs.fork != 'true' }}
+        if: ${{ steps.auth.outputs.authorized == 'true' && steps.pr.outputs.fork != 'true' }}
         uses: actions/checkout@v5
         with:
           ref: ${{ steps.pr.outputs.sha }}
@@ -129,7 +155,7 @@ jobs:
       # `uses: ./<path>` below. This keeps the action ref parametric so
       # the recheck stays in sync with the main workflow's pin.
       - name: Fetch action source at requested ref
-        if: ${{ steps.pr.outputs.fork != 'true' }}
+        if: ${{ steps.auth.outputs.authorized == 'true' && steps.pr.outputs.fork != 'true' }}
         uses: actions/checkout@v5
         with:
           repository: iii-hq/skills-and-validation
@@ -137,7 +163,7 @@ jobs:
           path: .skv-action
 
       - name: Run skill-check with write enabled
-        if: ${{ steps.pr.outputs.fork != 'true' }}
+        if: ${{ steps.auth.outputs.authorized == 'true' && steps.pr.outputs.fork != 'true' }}
         uses: ./.skv-action
         with:
           config-path: ${{ inputs.config-path }}
