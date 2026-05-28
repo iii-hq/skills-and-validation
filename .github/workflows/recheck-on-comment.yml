@@ -21,6 +21,11 @@ name: skill-check recheck
 #         anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 #
 # Constraints:
+#   - **Must live on the default branch.** GitHub runs issue_comment
+#     workflows only from the consumer repo's default branch (security
+#     feature). The listener workflow file has to be merged to `main`
+#     before checking the box does anything; adding it on a feature
+#     branch is a no-op for that PR.
 #   - Only fires on a real transition: the checkbox must go from
 #     unchecked to checked. Editing other parts of the comment is a
 #     no-op.

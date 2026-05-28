@@ -6,6 +6,7 @@
 # `config-path` for repos that keep their config elsewhere).
 #
 # Pin the version on the `uses:` line to a tag you've validated against.
+# `@v0.4` tracks the latest v0.4.x patch.
 
 name: skill-check
 
@@ -15,16 +16,22 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
-  pull-requests:
-    write # opt-in: enables the sticky PR comment.
-    # Omit to keep just inline annotations + the run summary.
+  contents: read           # report-only by default; flip to `write` to opt into auto-commit (see below)
+  pull-requests: write     # opt-in: enables the sticky PR comment
+  actions: write           # opt-in: persistent AI skip-cache (v0.3+)
 
 jobs:
   skill-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: iii-hq/skills-and-validation@v0.1.0
+      # No explicit `ref:` — checkout defaults to refs/pull/N/merge on
+      # pull_request, which works for same-repo AND fork PRs. Setting
+      # `ref: github.head_ref` here breaks fork PRs (the head branch
+      # only exists in the fork, not in this repo).
+      - uses: actions/checkout@v5
+      - uses: iii-hq/skills-and-validation@v0.4
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # scope: pr-diff   # opt-in: only validate files in the PR's diff
+          # write: false     # default; set true (plus `contents: write` above)
+                             # to auto-commit re-rendered artifacts to the PR branch

@@ -102,16 +102,19 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
-  pull-requests: write # opt-in: enables the sticky PR comment
-  actions: write # opt-in: persistent AI skip-cache
+  contents: read           # report-only by default; set to write to opt into auto-commit
+  pull-requests: write     # opt-in: enables the sticky PR comment
+  actions: write           # opt-in: persistent AI skip-cache
 
 jobs:
   skill-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: iii-hq/skills-and-validation@v0.3
+      # No explicit ref: — checkout defaults to refs/pull/N/merge on
+      # pull_request, which works for same-repo and fork PRs. Setting
+      # `ref: github.head_ref` breaks fork PRs (head branch isn't here).
+      - uses: actions/checkout@v5
+      - uses: iii-hq/skills-and-validation@v0.4
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
@@ -119,6 +122,36 @@ jobs:
 Set `ANTHROPIC_API_KEY` as a repo secret so the AI layer runs in CI. Without it, CI runs structure + Vale only and emits a workflow warning.
 
 `workers-glob` defaults to `*/iii.worker.yaml`. Override it (or set `config-path`) for non-default layouts. Full input reference under [Action inputs](#action-inputs).
+
+### Re-render on demand (checkbox in the PR comment)
+
+When `scope: pr-diff` is in use, the verify step can pass while rendered artifacts drift from sources (drift is detected globally; verify only checks files in scope). On a `write: false` run, the sticky comment ends with a checkbox:
+
+```markdown
+- [ ] **Re-render this branch and commit rendered artifacts**
+```
+
+Adopt the opt-in listener so the box actually triggers a re-render. Add this **separate** workflow file:
+
+```yaml
+# .github/workflows/skill-check-recheck.yml
+name: skill-check recheck
+on:
+  issue_comment:
+    types: [edited]
+jobs:
+  recheck:
+    uses: iii-hq/skills-and-validation/.github/workflows/recheck-on-comment.yml@v0.4
+    with:
+      config-path: .skill-check.yaml   # match the main workflow's config-path
+      action-ref: v0.4                 # match the main workflow's pin
+    secrets:
+      anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Critical: GitHub runs `issue_comment` workflows from the **default branch only** (security feature). The file must be merged to `main` before the box does anything — adding it on a feature branch won't fire the listener for that PR. After merge, the box re-runs the action with `write: true` on the PR head.
+
+Gating: the commenter must be the PR author OR have OWNER / MEMBER / COLLABORATOR association. Fork PRs short-circuit with an explanatory comment — `GITHUB_TOKEN` cannot push to forks.
 
 ---
 
