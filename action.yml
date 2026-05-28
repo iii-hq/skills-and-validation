@@ -206,13 +206,23 @@ runs:
             drift_paths+=" $dir/README.md $dir/skill.md $dir/skills"
           done
         fi
-        if [ -n "$drift_paths" ] \
-           && [ -n "$(git status --porcelain -- $drift_paths 2>/dev/null)" ]; then
+        # Capture the actual dirty paths to a file so a later step can
+        # classify each as in- or out-of-pr-diff-scope. The classify step
+        # has access to CHANGED_FILES (computed by the diff step that
+        # runs after render); we can't do the split here.
+        dirty_paths_file="${RUNNER_TEMP:-/tmp}/skv-drift-paths"
+        : > "$dirty_paths_file"
+        if [ -n "$drift_paths" ]; then
+          git status --porcelain -- $drift_paths 2>/dev/null \
+            | awk '{print $NF}' > "$dirty_paths_file"
+        fi
+        if [ -s "$dirty_paths_file" ]; then
           echo "drift=present" >> "$GITHUB_OUTPUT"
           echo "rendered output drifted from sources; verify will run against the fresh artifacts."
         else
           echo "drift=none" >> "$GITHUB_OUTPUT"
         fi
+        echo "drift_paths_file=$dirty_paths_file" >> "$GITHUB_OUTPUT"
 
         echo "preflight-log=$preflight_log" >> "$GITHUB_OUTPUT"
         echo "render-fail=$fail" >> "$GITHUB_OUTPUT"
@@ -295,6 +305,70 @@ runs:
           echo "pr-diff scope: filtering to $count file(s)"
           echo "changed-files=$out" >> "$GITHUB_OUTPUT"
         fi
+
+    # Classify dirty rendered artifacts as in-scope (the PR touched this
+    # worker/doc) vs out-of-scope (stale on main, unrelated to this PR).
+    # The action errors only on in-scope drift; out-of-scope drift surfaces
+    # as a warning + a note in the sticky comment so maintainers can
+    # follow up with a chore re-render, without blocking unrelated PRs.
+    #
+    # The mapping from a dirty artifact to "did this PR touch its source":
+    #   docs:    dirty path is `<doc>.skill.md` → in-scope iff `<doc>` is in CHANGED_FILES
+    #   workers: dirty path is `<dir>/...` → in-scope iff any CHANGED_FILES line begins `<dir>/`
+    #
+    # An empty CHANGED_FILES means "no diff scope applied" (push event,
+    # scope=all, or a pr-diff bailout). The whole corpus is in scope in
+    # that case, so every dirty path is in-scope drift.
+    - name: Classify drift by pr-diff scope
+      id: drift_class
+      if: ${{ always() && steps.render.outputs.drift == 'present' }}
+      shell: bash
+      env:
+        DRIFT_PATHS_FILE: ${{ steps.render.outputs.drift_paths_file }}
+        CHANGED_FILES: ${{ steps.diff.outputs.changed-files }}
+        MODE: ${{ steps.mode.outputs.mode }}
+      run: |
+        in_scope_file="${RUNNER_TEMP:-/tmp}/skv-drift-in-scope"
+        out_of_scope_file="${RUNNER_TEMP:-/tmp}/skv-drift-out-of-scope"
+        : > "$in_scope_file"
+        : > "$out_of_scope_file"
+
+        if [ -z "${CHANGED_FILES:-}" ] || [ ! -s "${CHANGED_FILES:-/nonexistent}" ]; then
+          # Full scan: every dirty path is in-scope (no narrowing happens).
+          cp "$DRIFT_PATHS_FILE" "$in_scope_file"
+        else
+          while IFS= read -r d; do
+            [ -n "$d" ] || continue
+            if [ "$MODE" = "docs" ]; then
+              src="${d%.skill.md}"
+              if grep -Fxq "$src" "$CHANGED_FILES"; then
+                echo "$d" >> "$in_scope_file"
+              else
+                echo "$d" >> "$out_of_scope_file"
+              fi
+            else
+              worker="${d%%/*}"
+              if grep -Eq "^${worker}/" "$CHANGED_FILES"; then
+                echo "$d" >> "$in_scope_file"
+              else
+                echo "$d" >> "$out_of_scope_file"
+              fi
+            fi
+          done < "$DRIFT_PATHS_FILE"
+        fi
+
+        in_n=$(wc -l < "$in_scope_file" | tr -d ' ')
+        out_n=$(wc -l < "$out_of_scope_file" | tr -d ' ')
+        in_present="none";  [ "$in_n"  -gt 0 ] && in_present="present"
+        out_present="none"; [ "$out_n" -gt 0 ] && out_present="present"
+
+        echo "drift_in_scope=$in_present" >> "$GITHUB_OUTPUT"
+        echo "drift_out_of_scope=$out_present" >> "$GITHUB_OUTPUT"
+        echo "drift_in_scope_paths_file=$in_scope_file" >> "$GITHUB_OUTPUT"
+        echo "drift_out_of_scope_paths_file=$out_of_scope_file" >> "$GITHUB_OUTPUT"
+        echo "drift_in_scope_count=$in_n" >> "$GITHUB_OUTPUT"
+        echo "drift_out_of_scope_count=$out_n" >> "$GITHUB_OUTPUT"
+        echo "drift classification: in_scope=$in_n out_of_scope=$out_n"
 
     # Persistent skip-cache for the AI layer. Hash inputs are
     # (artifact, rules, system_prompt, model, doc_type); on a hit the
@@ -510,16 +584,45 @@ runs:
         WRITE_MODE: ${{ inputs.write }}
         COMMIT_STATUS: ${{ steps.commit.outputs.committed }}
         PR_IS_FORK: ${{ github.event.pull_request.head.repo.fork || 'false' }}
+        DRIFT_IN_SCOPE_COUNT: ${{ steps.drift_class.outputs.drift_in_scope_count }}
+        DRIFT_OUT_OF_SCOPE_COUNT: ${{ steps.drift_class.outputs.drift_out_of_scope_count }}
+        DRIFT_IN_SCOPE_PATHS: ${{ steps.drift_class.outputs.drift_in_scope_paths_file }}
+        DRIFT_OUT_OF_SCOPE_PATHS: ${{ steps.drift_class.outputs.drift_out_of_scope_paths_file }}
       run: |
         "${{ github.action_path }}/scripts/augment-summary-drift.sh" \
           "$BODY" "$WRITE_MODE" "$COMMIT_STATUS" "$PR_IS_FORK"
 
-    - name: Fail on drift (read-only mode)
-      if: ${{ always() && inputs.write != 'true' && steps.render.outputs.drift == 'present' }}
+    # In-scope drift = files this PR touches; treat as a hard error and
+    # block the run. Out-of-scope drift is handled by the next step
+    # (warning, not error) so unrelated stale artifacts on main don't
+    # block PRs that have nothing to do with them.
+    - name: Fail on in-scope drift (read-only mode)
+      if: ${{ always() && inputs.write != 'true' && steps.drift_class.outputs.drift_in_scope == 'present' }}
       shell: bash
+      env:
+        IN_SCOPE: ${{ steps.drift_class.outputs.drift_in_scope_paths_file }}
+        OUT_OF_SCOPE_N: ${{ steps.drift_class.outputs.drift_out_of_scope_count }}
       run: |
-        echo "::error::rendered artifacts are out of date — re-render locally (\`iii-skill-render <target> --write\`) and commit, or set \`write: true\` on the action to let CI commit it for you."
+        echo "::error::rendered artifacts in this PR's scope are out of date — re-render locally (\`iii-skill-render <target> --write\`) and commit, or set \`write: true\` on the action to let CI commit it for you. Affected paths:"
+        while IFS= read -r p; do [ -n "$p" ] && echo "  $p"; done < "$IN_SCOPE"
+        if [ "${OUT_OF_SCOPE_N:-0}" -gt 0 ]; then
+          echo "::notice::also detected ${OUT_OF_SCOPE_N} stale artifact(s) outside this PR's scope — those will be flagged in the sticky comment but don't block this PR."
+        fi
         exit 1
+
+    # Out-of-scope drift only (no in-scope drift to fail on): emit a
+    # workflow warning so the run summary surfaces it, but exit 0. The
+    # sticky comment also includes a NOTE block with the affected paths
+    # so a maintainer can open a chore re-render PR.
+    - name: Warn on out-of-scope drift (read-only mode)
+      if: ${{ always() && inputs.write != 'true' && steps.drift_class.outputs.drift_out_of_scope == 'present' && steps.drift_class.outputs.drift_in_scope != 'present' }}
+      shell: bash
+      env:
+        OUT_OF_SCOPE: ${{ steps.drift_class.outputs.drift_out_of_scope_paths_file }}
+        OUT_OF_SCOPE_N: ${{ steps.drift_class.outputs.drift_out_of_scope_count }}
+      run: |
+        echo "::warning::detected ${OUT_OF_SCOPE_N} stale rendered artifact(s) outside this PR's scope (pre-existing on main). This PR isn't blocked, but a maintainer should re-render in a follow-up chore PR. Affected paths:"
+        while IFS= read -r p; do [ -n "$p" ] && echo "  $p"; done < "$OUT_OF_SCOPE"
 
     - name: Post sticky PR comment (opt-in via pull-requests:write)
       if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'issue_comment') && steps.verify.outputs.summary != '' }}
