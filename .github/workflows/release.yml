@@ -2,12 +2,16 @@ name: release
 
 on:
   push:
-    # Patch tags only (X.Y.Z), not the X.Y / X floats. Force-pushing
-    # `v0.4` to roll the float forward previously fired this workflow
-    # and created a duplicate release titled "v0.4", which broke
-    # `/releases/latest` resolution for consumers (ci-install.sh
-    # couldn't parse the two-component version).
-    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+    # Patch tags only (X.Y.Z), not the X.Y / X floats. `on.push.tags`
+    # uses glob syntax (NOT regex), so `+` and `[0-9]` quantifier-style
+    # forms don't work — `v*.*.*` is the semver-shaped glob that
+    # requires two dots and excludes `v0.4` / `v0`.
+    #
+    # Force-pushing `v0.4` to roll the float forward previously fired
+    # this workflow with `v*` and created a duplicate release titled
+    # "v0.4", which broke `/releases/latest` resolution for consumers
+    # (ci-install.sh couldn't parse the two-component version).
+    tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       tag:
