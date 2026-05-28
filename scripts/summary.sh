@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # summary.sh — emit a markdown report of skill-check results.
 #
-# Usage: summary.sh <log-file> [mode-label]
+# Usage: summary.sh <log-file> [mode-label] [drift-state]
 # Output goes to stdout — the caller redirects to $GITHUB_STEP_SUMMARY,
 # pipes into the PR-comment body, etc. `mode-label` (optional) is
 # appended to the title so consumers running the action multiple times
 # in one workflow (matrix over modes) can tell their sticky comments
-# apart at a glance.
+# apart at a glance. `drift-state` is `present` / `none` from the render
+# step — when `present`, the layer table marks the render row ✗ and the
+# "Nicely done" closer is suppressed (the augment step appends the
+# CAUTION block with re-render instructions in its place).
 
 set -euo pipefail
 
 input="${1:?missing log-file arg}"
 MODE_LABEL="${2:-}"
+DRIFT_STATE="${3:-none}"
 
 # Violation lines are `<path>:~<line>:<severity> — <message>` with
 # severity ∈ {error, warning} and an optional `~` prefix on the line
@@ -36,9 +40,11 @@ if [ -n "$counts" ]; then
 fi
 
 if [ "$total" -eq 0 ]; then
-  # Per-layer checklist (whichever layers actually ran)
+  # Per-layer checklist (whichever layers actually ran). `render` is
+  # always shown as a final row because it runs unconditionally before
+  # verify — its outcome is the drift state from the render step.
   layer_count=0
-  if [ -n "$layers" ]; then
+  if [ -n "$layers" ] || [ "$DRIFT_STATE" = "present" ]; then
     echo "| Layer     | Result |"
     echo "| --------- | ------ |"
     IFS=',' read -ra layer_arr <<< "$layers"
@@ -48,16 +54,29 @@ if [ "$total" -eq 0 ]; then
       printf '| %-9s | ✓      |\n' "$layer"
       layer_count=$((layer_count + 1))
     done
+    if [ "$DRIFT_STATE" = "present" ]; then
+      printf '| %-9s | ✗      |\n' "render"
+    else
+      printf '| %-9s | ✓      |\n' "render"
+    fi
     echo
   fi
 
-  # "Three for three. Nicely done." style closer, scaled to the actual
-  # number of layers that ran.
-  case "$layer_count" in
-    3) echo "Three for three. Nicely done." ;;
-    2) echo "Two for two. Nicely done." ;;
-    *) echo "Nicely done." ;;
-  esac
+  # Suppress the "Nicely done" closer when drift is present — the
+  # augment step appends a CAUTION block (with re-render instructions or
+  # a "CI committed" note) immediately after this table. Saying "Nicely
+  # done" right before a CAUTION block was the confusing combination
+  # that masked the failure.
+  if [ "$DRIFT_STATE" != "present" ]; then
+    # Scale the closer to the actual number of layers (incl. render).
+    layer_count=$((layer_count + 1))
+    case "$layer_count" in
+      4) echo "Four for four. Nicely done." ;;
+      3) echo "Three for three. Nicely done." ;;
+      2) echo "Two for two. Nicely done." ;;
+      *) echo "Nicely done." ;;
+    esac
+  fi
   exit 0
 fi
 
