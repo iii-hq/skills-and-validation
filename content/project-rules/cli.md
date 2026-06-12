@@ -56,6 +56,10 @@ noun-verb pair as *unrecognized* (not as a convention violation).
 
 **`iii worker sandbox`** subcommands: `run`, `create`, `exec`, `list`, `stop`, `upload`, `download`.
 
+Sandbox lives under the `worker` noun; top-level `iii sandbox <verb>` was removed and the CLI
+rejects it (`error: unrecognized subcommand 'sandbox'`). Flag `iii sandbox <verb>` as
+*unrecognized* with the replacement `iii worker sandbox <verb>`.
+
 **`iii project`** subcommands: `init`, `generate-docker`.
 
 **Verbless top-level commands** (take args, not a verb): `iii trigger <function-path>`,
@@ -81,7 +85,7 @@ rather than duplicate them.
 
 The CLI page covers:
 
-- Engine flags (`--config`, `--use-default-config`, `--version`).
+- Engine flags (`--config`, `--use-default-config`, `--no-update-check`, `--version`).
 - Cross-cutting CLI verbs that aren't tied to a noun (`iii trigger ...` for invoking functions, if
   that survives).
 - A pointer to `using-iii/workers.mdx` for `iii worker` subcommands.
