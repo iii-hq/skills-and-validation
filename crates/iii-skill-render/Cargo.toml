@@ -13,3 +13,6 @@ iii-skill-core = { path = "../iii-skill-core" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"
