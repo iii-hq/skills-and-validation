@@ -17,20 +17,23 @@ different fixes and different severities.
    start with `re-`. Naming is a guideline rather than a hard requirement; the right form is often
    debatable, so this check surfaces as a warning rather than an error.
 
-2. **Recognized-list check.** Even when the convention is satisfied, the second word must be a
-   known subcommand of the noun. A novel-but-conformant command (e.g., `iii worker reinstall`)
-   should be flagged as *unrecognized*, with the suggested replacement when one exists. Do not say
-   "doesn't follow the noun-verb convention" for these — the convention is fine; the command isn't
-   in the catalog. Unrecognized commands are an error (they mislead readers about what the CLI
-   actually supports).
+2. **Recognized-list check. Severity: warning.** The catalog below is a *partial* list of commands
+   we happen to know about — it is **not** a complete inventory of the CLI. You do not know every
+   command, subcommand, flag, or argument that exists. So when a command, subcommand, flag, or
+   argument doesn't appear in the catalog, assume it's **likely valid** and that the gap is in our
+   list, not the docs. At most surface it as a **warning** ("couldn't confirm this against our
+   command list — verify it exists"), never an error, and link a replacement only when the catalog
+   explicitly documents a removal/rename (see the `iii sandbox` case below). When in doubt, stay
+   silent. The convention check (#1) is independent of this and still applies.
 
 3. **"Re-" verbs are still verbs.** `reinstall`, `restart`, `reset`, `rebuild` all satisfy the
    noun-verb convention. Do not flag them on convention grounds.
 
 ### Recognized iii commands
 
-Canonical lists from `iii <noun> --help`. Treat these as the source of truth; flag any other
-noun-verb pair as *unrecognized* (not as a convention violation).
+A partial list of commands we know about, gathered from `iii <noun> --help`. This is **not**
+exhaustive — the CLI has commands, subcommands, and flags not listed here. A noun-verb pair that's
+absent is unconfirmed, not wrong; at most warn (see the recognized-list check above), don't error.
 
 **`iii worker`** subcommands:
 - `iii worker init`
