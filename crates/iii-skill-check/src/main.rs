@@ -108,19 +108,35 @@ fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     iii_skill_core::update_check::run_gate(cli.allow_old_version);
     match cli.command {
+        // Resolve the target to an absolute path up front so the
+        // `.skill-check.yaml` walk-up, scope globs, and repo-root-relative
+        // display are all independent of the caller's CWD and of whether
+        // the target was passed relative or absolute.
         Command::Verify {
             target,
             layers,
             rules_dir,
             vale_config,
-        } => dispatch_verify(&target, &layers, rules_dir, vale_config),
-        Command::VerifyRendered { target } => dispatch_verify_rendered(&target),
+        } => dispatch_verify(
+            &iii_skill_core::paths::absolutize(&target),
+            &layers,
+            rules_dir,
+            vale_config,
+        ),
+        Command::VerifyRendered { target } => {
+            dispatch_verify_rendered(&iii_skill_core::paths::absolutize(&target))
+        }
         Command::CheckFile {
             target,
             r#type,
             layers,
             rules_dir,
-        } => check_file(&target, r#type.into(), &layers, rules_dir),
+        } => check_file(
+            &iii_skill_core::paths::absolutize(&target),
+            r#type.into(),
+            &layers,
+            rules_dir,
+        ),
     }
 }
 
@@ -154,7 +170,7 @@ fn dispatch_verify(
                 if !iii_skill_core::docs::enumerate::is_in_scope(target, root, docs_config)? {
                     println!(
                         "skipped {} (out of scope per `.skill-check.yaml`)",
-                        target.display()
+                        iii_skill_core::paths::display_relative(target)
                     );
                     return Ok(());
                 }
@@ -181,7 +197,7 @@ fn dispatch_verify_rendered(target: &Path) -> anyhow::Result<()> {
                 if !iii_skill_core::docs::enumerate::is_in_scope(target, root, docs_config)? {
                     println!(
                         "skipped {} (out of scope per `.skill-check.yaml`)",
-                        target.display()
+                        iii_skill_core::paths::display_relative(target)
                     );
                     return Ok(());
                 }
@@ -378,7 +394,12 @@ fn verify_worker(
 
     let needs_artifact = layer_set.contains("vale") || layer_set.contains("ai");
     if !needs_artifact {
-        return report(&all_violations, &ai_failures, layers, &worker.display().to_string());
+        return report(
+            &all_violations,
+            &ai_failures,
+            layers,
+            &iii_skill_core::paths::display_relative(worker),
+        );
     }
 
     // Render in memory so vale + ai always see fresh artifacts — running
@@ -389,11 +410,16 @@ fn verify_worker(
         Ok(r) => r,
         Err(e) => {
             all_violations.push(iii_skill_core::structure::Violation::error(
-                worker.display().to_string(),
+                iii_skill_core::paths::display_relative(worker),
                 None,
                 format!("render failed (cannot run vale/ai): {e}"),
             ));
-            return report(&all_violations, &ai_failures, layers, &worker.display().to_string());
+            return report(
+            &all_violations,
+            &ai_failures,
+            layers,
+            &iii_skill_core::paths::display_relative(worker),
+        );
         }
     };
 
@@ -467,7 +493,12 @@ fn verify_worker(
         }
     }
 
-    report(&all_violations, &ai_failures, layers, &worker.display().to_string())
+    report(
+        &all_violations,
+        &ai_failures,
+        layers,
+        &iii_skill_core::paths::display_relative(worker),
+    )
 }
 
 fn verify_rendered_worker(worker: &Path) -> anyhow::Result<()> {
@@ -480,7 +511,10 @@ fn verify_rendered_worker(worker: &Path) -> anyhow::Result<()> {
             "rendered artifacts are out of date — run `iii-skill-render <worker> --write`"
         );
     }
-    println!("rendered artifacts match {}", worker.display());
+    println!(
+        "rendered artifacts match {}",
+        iii_skill_core::paths::display_relative(worker)
+    );
     Ok(())
 }
 
@@ -500,7 +534,10 @@ fn verify_docs(
     let layer_set: HashSet<&str> = layers.split(',').map(|s| s.trim()).collect();
     let docs = iii_skill_core::docs::enumerate::enumerate(root, docs_config)?;
     if docs.is_empty() {
-        eprintln!("::warning::no docs matched docs.include / docs.exclude in {}", root.display());
+        eprintln!(
+            "::warning::no docs matched docs.include / docs.exclude in {}",
+            iii_skill_core::paths::display_relative(root)
+        );
     }
 
     let mut all_violations: Vec<iii_skill_core::structure::Violation> = Vec::new();
@@ -623,7 +660,12 @@ fn verify_docs(
         }
     }
 
-    report(&all_violations, &ai_failures, layers, &root.display().to_string())
+    report(
+        &all_violations,
+        &ai_failures,
+        layers,
+        &iii_skill_core::paths::display_relative(root),
+    )
 }
 
 /// Verify a single doc file. Used when the action iterates `docs-glob`
@@ -718,7 +760,7 @@ fn verify_doc_file(
                 // for unrenderable docs; structure layer usually flags the
                 // same frontmatter issue with more detail.
                 all_violations.push(iii_skill_core::structure::Violation::error(
-                    source.display().to_string(),
+                    iii_skill_core::paths::display_relative(source),
                     None,
                     format!("render failed (cannot run vale/ai): {e}"),
                 ));
@@ -726,7 +768,12 @@ fn verify_doc_file(
         }
     }
 
-    report(&all_violations, &ai_failures, layers, &source.display().to_string())
+    report(
+        &all_violations,
+        &ai_failures,
+        layers,
+        &iii_skill_core::paths::display_relative(source),
+    )
 }
 
 fn verify_rendered_doc_file(source: &Path) -> anyhow::Result<()> {
@@ -734,17 +781,16 @@ fn verify_rendered_doc_file(source: &Path) -> anyhow::Result<()> {
     s.push(".skill.md");
     let skill_path = PathBuf::from(s);
 
+    let rel = iii_skill_core::paths::display_relative(source);
     let rendered = iii_skill_core::docs::render::render_doc(source)?;
     let on_disk = std::fs::read_to_string(&skill_path).unwrap_or_default();
     if on_disk != rendered.body {
         eprintln!(
-            "{}.skill.md is out of date — re-run `iii-skill-render {}`",
-            source.display(),
-            source.display()
+            "{rel}.skill.md is out of date — re-run `iii-skill-render {rel}`"
         );
         anyhow::bail!("rendered skill artifact is out of date");
     }
-    println!("rendered skill artifact matches {}", source.display());
+    println!("rendered skill artifact matches {rel}");
     Ok(())
 }
 
@@ -765,7 +811,10 @@ fn verify_rendered_docs(
             "docs skill artifacts are out of date — run `iii-skill-render <docs-root> --write`"
         );
     }
-    println!("docs skill artifacts match sources in {}", root.display());
+    println!(
+        "docs skill artifacts match sources in {}",
+        iii_skill_core::paths::display_relative(root)
+    );
     Ok(())
 }
 
@@ -778,7 +827,10 @@ fn check_file(
     rules_override: Option<PathBuf>,
 ) -> anyhow::Result<()> {
     if !target.is_file() {
-        anyhow::bail!("check-file target is not a file: {}", target.display());
+        anyhow::bail!(
+            "check-file target is not a file: {}",
+            iii_skill_core::paths::display_relative(target)
+        );
     }
     let (config_path, config) = load_controlling_config(target)?;
     let root = config_path
@@ -804,7 +856,7 @@ fn check_file(
             .count();
         if starts != ends {
             all_violations.push(iii_skill_core::structure::Violation::error(
-                target.display().to_string(),
+                iii_skill_core::paths::display_relative(target),
                 None,
                 format!(
                     "unbalanced llm-only blocks: {starts} start markers, {ends} end markers"
@@ -845,7 +897,12 @@ fn check_file(
         }
     }
 
-    report(&all_violations, &ai_failures, layers, &target.display().to_string())
+    report(
+        &all_violations,
+        &ai_failures,
+        layers,
+        &iii_skill_core::paths::display_relative(target),
+    )
 }
 
 // --- shared helpers --------------------------------------------------------
@@ -939,9 +996,16 @@ fn report(
 /// the path was never a rendered artifact). Returns the path as a
 /// String to avoid lossy round-trips through PathBuf for display.
 fn display_source_line(file: &str, line: usize) -> (String, usize) {
+    // Whatever path we end up citing — the source-mapped partial or the
+    // original artifact — is normalized to repo-root-relative form so
+    // violation output never leaks an absolute on-disk path (and stays
+    // identical across machines / working directories).
     match iii_skill_core::source_map::translate(std::path::Path::new(file), line) {
-        Some((src, src_line)) => (src.display().to_string(), src_line),
-        None => (file.to_string(), line),
+        Some((src, src_line)) => (iii_skill_core::paths::display_relative(&src), src_line),
+        None => (
+            iii_skill_core::paths::display_relative(std::path::Path::new(file)),
+            line,
+        ),
     }
 }
 
@@ -1142,8 +1206,41 @@ fn locate_diataxis_dir() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_ai_line, normalize_ai_violation_line};
+    use super::{classify_ai_line, display_source_line, normalize_ai_violation_line};
     use iii_skill_core::structure::Severity;
+
+    #[test]
+    fn display_source_line_is_repo_root_relative_for_absolute_artifact() {
+        // A violation cited against an absolute `<source>.skill.md` path
+        // must be source-mapped back to the source AND rendered
+        // repo-root-relative — never as an absolute on-disk path that
+        // would leak the author's home dir and differ across machines.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir(root.join(".git")).unwrap();
+        std::fs::create_dir_all(root.join("content/skills")).unwrap();
+        let source = root.join("content/skills/foo.md");
+        std::fs::write(&source, "# Foo\n\nA distinctive body line.\n").unwrap();
+        // The rendered artifact carries the same body line so translate
+        // anchors line 3 back to the source.
+        let artifact = root.join("content/skills/foo.md.skill.md");
+        std::fs::write(&artifact, "# Foo\n\nA distinctive body line.\n").unwrap();
+
+        let (path, _line) = display_source_line(&artifact.to_string_lossy(), 3);
+        assert_eq!(path, "content/skills/foo.md");
+        assert!(
+            !path.contains(root.to_string_lossy().as_ref()),
+            "path must not leak the absolute repo root, got: {path}"
+        );
+    }
+
+    #[test]
+    fn display_source_line_falls_back_for_unmapped_path() {
+        // A path that isn't a rendered artifact (no candidates) and
+        // doesn't exist on disk passes through unchanged.
+        let (path, line) = display_source_line("docs/handwritten.md", 7);
+        assert_eq!((path.as_str(), line), ("docs/handwritten.md", 7));
+    }
 
     #[test]
     fn injects_error_severity_and_source_maps_judge_line() {

@@ -384,7 +384,7 @@ runs:
     - name: Restore AI pass cache
       id: ai-cache-restore
       if: ${{ contains(inputs.layers, 'ai') }}
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v5
       with:
         path: ${{ runner.temp }}/skv-ai-pass-cache
         key: skv-ai-pass-cache-v1-${{ inputs.config-path }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -462,7 +462,7 @@ runs:
     # so saving on FAIL is safe: failing artifacts didn't write to it.
     - name: Save AI pass cache
       if: ${{ always() && contains(inputs.layers, 'ai') && steps.ai-cache-restore.outcome == 'success' }}
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v5
       with:
         path: ${{ runner.temp }}/skv-ai-pass-cache
         key: skv-ai-pass-cache-v1-${{ inputs.config-path }}-${{ github.run_id }}-${{ github.run_attempt }}

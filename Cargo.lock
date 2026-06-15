@@ -643,6 +643,7 @@ dependencies = [
  "anyhow",
  "clap",
  "iii-skill-core",
+ "tempfile",
  "walkdir",
 ]
 

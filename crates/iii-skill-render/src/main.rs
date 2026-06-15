@@ -31,50 +31,56 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     iii_skill_core::update_check::run_gate(cli.allow_old_version);
 
-    let config_path = find_skill_check_yaml(&cli.target).ok_or_else(|| {
+    // Resolve the target to an absolute path up front. Everything
+    // downstream — the `.skill-check.yaml` walk-up, scope globs, and the
+    // repo-root-relative header — is then independent of the caller's CWD
+    // and of whether they passed a relative or absolute path.
+    let target = iii_skill_core::paths::absolutize(&cli.target);
+
+    let config_path = find_skill_check_yaml(&target).ok_or_else(|| {
         anyhow::anyhow!(
             "no `.skill-check.yaml` found at or above {}",
-            cli.target.display()
+            target.display()
         )
     })?;
     let config = iii_skill_core::config::load(&config_path)?;
 
     match config.resolved_mode() {
         iii_skill_core::config::Mode::Worker => {
-            if !cli.target.is_dir() {
+            if !target.is_dir() {
                 anyhow::bail!(
                     "worker mode expects a directory target; {} is not a directory",
-                    cli.target.display()
+                    target.display()
                 );
             }
-            if !cli.target.join("iii.worker.yaml").is_file() {
+            if !target.join("iii.worker.yaml").is_file() {
                 anyhow::bail!(
                     "worker mode but {} has no iii.worker.yaml",
-                    cli.target.display()
+                    target.display()
                 );
             }
-            render_worker_dir(&cli.target, cli.write)
+            render_worker_dir(&target, cli.write)
         }
         iii_skill_core::config::Mode::Docs => {
             let docs_root = config_path
                 .parent()
                 .ok_or_else(|| anyhow::anyhow!("`.skill-check.yaml` has no parent dir"))?;
-            if cli.target.is_file() {
+            if target.is_file() {
                 let docs_config = config.docs.as_ref().ok_or_else(|| {
                     anyhow::anyhow!("docs mode but `.skill-check.yaml` has no `docs:` block")
                 })?;
                 if !iii_skill_core::docs::enumerate::is_in_scope(
-                    &cli.target,
+                    &target,
                     docs_root,
                     docs_config,
                 )? {
                     println!(
                         "skipped {} (out of scope per `.skill-check.yaml`)",
-                        cli.target.display()
+                        iii_skill_core::paths::display_relative(&target)
                     );
                     return Ok(());
                 }
-                return render_single_doc(&cli.target, cli.write);
+                return render_single_doc(&target, cli.write);
             }
             render_docs_root(docs_root, &config, cli.write)
         }
@@ -105,7 +111,7 @@ fn render_worker_dir(worker: &Path, write: bool) -> Result<()> {
     let out = iii_skill_core::render::render_worker(worker)?;
     println!(
         "rendered {} (readme {} bytes, skill {} bytes)",
-        worker.display(),
+        iii_skill_core::paths::display_relative(worker),
         out.readme.len(),
         out.skill.len(),
     );
@@ -184,7 +190,7 @@ fn render_single_doc(path: &Path, write: bool) -> Result<()> {
     let rendered = iii_skill_core::docs::render::render_doc(path)?;
     println!(
         "rendered {} ({} bytes, type={})",
-        path.display(),
+        iii_skill_core::paths::display_relative(path),
         rendered.body.len(),
         rendered.frontmatter.doc_type
     );
@@ -194,7 +200,7 @@ fn render_single_doc(path: &Path, write: bool) -> Result<()> {
         let skill = PathBuf::from(skill);
         std::fs::write(&skill, &rendered.body)
             .with_context(|| format!("writing {}", skill.display()))?;
-        println!("wrote {}", skill.display());
+        println!("wrote {}", iii_skill_core::paths::display_relative(&skill));
     }
     Ok(())
 }
