@@ -11,7 +11,8 @@ tokens:
   - bolted on
   - bolted together
   - bolted-on
-  - bridge
+  - bridges? (the|between|together|across|over|to|into)
+  - bridging
   - cement
   - couple together
   - fasten
