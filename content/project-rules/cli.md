@@ -2,6 +2,10 @@
 
 Rules for the `iii` CLI surface and how it's documented.
 
+The CLI is under active development and its surface is changing frequently. Every check in this
+file that validates a command, subcommand, flag, or argument against what we know is
+**Severity: warning.** — never error on CLI-surface knowledge, because our knowledge lags the CLI.
+
 ## `iii noun verb` naming convention
 
 Commands and subcommands follow the pattern `iii <noun> <verb>` — the noun (what you're acting on)
@@ -51,19 +55,21 @@ absent is unconfirmed, not wrong; at most warn (see the recognized-list check ab
 - `iii worker status`
 - `iii worker logs`
 - `iii worker exec`
-- `iii worker sandbox`
 
 **`iii cloud`** subcommands: `login`, `logout`, `whoami`, `context`, `orgs`, `projects`, `envs`,
 `deploy`, `deployments`, `versions`, `vars`, `domains`, `api-keys`, `registry`, `completions`,
 `push`.
 
-**`iii worker sandbox`** subcommands: `run`, `create`, `exec`, `list`, `stop`, `upload`, `download`.
-
-Sandbox lives under the `worker` noun; top-level `iii sandbox <verb>` was removed and the CLI
-rejects it (`error: unrecognized subcommand 'sandbox'`). Flag `iii sandbox <verb>` as
-*unrecognized* with the replacement `iii worker sandbox <verb>`.
+**Sandbox** is invoked through the trigger mechanism: `iii trigger sandbox::<verb>` (e.g.
+`iii trigger sandbox::run`, `iii trigger sandbox::exec`). The earlier CLI forms — top-level
+`iii sandbox <verb>` and `iii worker sandbox <verb>` — are outdated. **Severity: warning.** Flag
+either form as *outdated* with the replacement `iii trigger sandbox::<verb>`.
 
 **`iii project`** subcommands: `init`, `generate-docker`.
+
+**Recognized flags** (partial, like the rest of this catalog): `--json` (machine-readable output;
+valid on many commands), `--config`, `--use-default-config`, `--no-update-check`, `--version`,
+`--list-targets`. Never flag a flag as invalid — at most warn that it couldn't be confirmed.
 
 **Verbless top-level commands** (take args, not a verb): `iii trigger <function-path>`,
 `iii console`, `iii update`. The `iii trigger` form is documented separately below.
@@ -86,9 +92,11 @@ rather than duplicate them.
 
 ## `using-iii/cli.mdx` scope
 
-The CLI page covers:
+**Severity: warning.** The CLI page covers:
 
-- Engine flags (`--config`, `--use-default-config`, `--no-update-check`, `--version`).
+- Engine flags (`--config`, `--use-default-config`, `--no-update-check`, `--version`). This list
+  is partial — other flags (e.g. `--json`) exist and are valid; do not flag a documented flag
+  just because it isn't listed here.
 - Cross-cutting CLI verbs that aren't tied to a noun (`iii trigger ...` for invoking functions, if
   that survives).
 - A pointer to `using-iii/workers.mdx` for `iii worker` subcommands.
