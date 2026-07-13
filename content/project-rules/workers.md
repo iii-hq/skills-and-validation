@@ -6,7 +6,7 @@ Rules for routing worker-related content and the worker concept itself.
 
 Specific iii workers (state, queue, stream, cron, pubsub, http, observability, bridge, exec, worker-manager, etc.) have their own dedicated **Worker Docs** outside the iii docs.
 
-When source content covers a specific worker — its config schema, its registered functions, its trigger types, its protocol details, its error codes — flag it for **Move to Worker Docs**. We never actually move it; that's left to the Worker Docs authors. Just note it in the decisions log.
+When source content covers a specific worker — its config schema, its registered functions, its trigger types, its protocol details, its error codes — flag it for **Move to Worker Docs**. **Severity: warning.** We never actually move it; that's left to the Worker Docs authors. Just note it in the decisions log — an advisory routing note, never a failure.
 
 This rule applies to:
 - Per-worker config schemas (port, host, adapter, exporter, etc.).
@@ -16,11 +16,13 @@ This rule applies to:
 
 **Carve-out — verbatim command output.** Fields that appear in the verbatim output of commands a
 docs page legitimately documents (e.g., a field like `broker_type` showing up in `iii worker list`
-or console output the page walks through) may be explained inline; a reader looking at the output
-needs the field named. The "Move to Worker Docs" flag targets config schemas,
-registered-function inventories, and wire-protocol internals — not brief inline explanations of
-output the page already shows. This is the same shape as the channel and logger/telemetry
-carve-outs below: don't flag inline documentation that the page can't reasonably do without.
+or console output the page walks through) may be explained inline — including a one-line gloss of
+the field's meaning and possible values; a reader looking at the output needs the field named. Do
+**not** flag such inline explanations at all, not even as a warning. The "Move to Worker Docs"
+flag targets config schemas, registered-function inventories, and wire-protocol internals — not
+brief inline explanations of output the page already shows. This is the same shape as the channel
+and logger/telemetry carve-outs below: don't flag inline documentation that the page can't
+reasonably do without.
 
 ## No "external vs built-in" worker distinction
 
