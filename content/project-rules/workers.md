@@ -14,6 +14,14 @@ This rule applies to:
 - Trigger types a worker provides (e.g., `http`, `cron`, `durable:subscriber`, `state`, `stream:join`).
 - Worker-internal protocol or error codes.
 
+**Carve-out — verbatim command output.** Fields that appear in the verbatim output of commands a
+docs page legitimately documents (e.g., a field like `broker_type` showing up in `iii worker list`
+or console output the page walks through) may be explained inline; a reader looking at the output
+needs the field named. The "Move to Worker Docs" flag targets config schemas,
+registered-function inventories, and wire-protocol internals — not brief inline explanations of
+output the page already shows. This is the same shape as the channel and logger/telemetry
+carve-outs below: don't flag inline documentation that the page can't reasonably do without.
+
 ## No "external vs built-in" worker distinction
 
 A worker is a worker. Don't introduce conceptual splits between SDK-driven processes and engine-bundled workers in the iii docs. If source content draws that distinction, drop or flatten it.
